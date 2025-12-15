@@ -21,10 +21,9 @@ services:
       - 'consul-template-log:/var/log/consul-template'
     depends_on: [consul]
 
-  # To be changed on a later stage, for now OpenLMIS ui will be used
   ui:
     restart: always
-    image: openlmis/reference-ui:${DRC_UI_VERSION}
+    image: openlmisrdc/ui:${DRC_UI_VERSION}
     env_file: settings.env
     depends_on: [consul]
 
@@ -106,10 +105,9 @@ services:
       - 'syslog:/var/log'
     depends_on: [log]
 
-  # To be changed on a later stage, for now OpenLMIS reports will be used
   report:
     restart: always
-    image: openlmis/report:${DRC_REPORT_VERSION}
+    image: openlmisrdc/report:${DRC_REPORT_VERSION}
     env_file: settings.env
     environment:
       JAVA_OPTS: '-server -Xmx2560m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
