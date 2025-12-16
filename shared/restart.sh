@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 docker compose down
+docker compose pull
 
 echo "Will keep data."
 
