@@ -8,6 +8,12 @@ services:
       - "8400"
       - "8500:8500"
       - "53"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-s", "http://127.0.0.1:8500/v1/status/leader"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
 
   nginx:
     image: openlmis/nginx:${OL_NGINX_VERSION}
@@ -19,35 +25,47 @@ services:
     volumes:
       - 'nginx-log:/var/log/nginx/log'
       - 'consul-template-log:/var/log/consul-template'
-    depends_on: [consul]
+    depends_on:
+      consul:
+        condition: service_healthy
 
   ui:
     restart: always
     image: openlmisrdc/ui:${DRC_UI_VERSION}
     env_file: settings.env
-    depends_on: [consul]
+    depends_on:
+      consul:
+        condition: service_healthy
 
   requisition:
     restart: always
     image: openlmis/requisition:${OL_REQUISITION_VERSION}
     env_file: settings.env
     environment:
-      JAVA_OPTS: '-server -Xmx2048m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
+      JAVA_OPTS: '-server -Xmx1536m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
     volumes:
       - 'service-config:/config'
       - 'syslog:/var/log'
-    depends_on: [log]
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
 
   referencedata:
     restart: always
     image: openlmis/referencedata:${OL_REFERENCEDATA_VERSION}
     env_file: settings.env
     environment:
-      JAVA_OPTS: '-server -Xmx2048m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
+      JAVA_OPTS: '-server -Xmx1536m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
     volumes:
       - 'service-config:/config'
       - 'syslog:/var/log'
-    depends_on: [log]
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
 
   auth:
     restart: always
@@ -59,7 +77,11 @@ services:
       - 'service-config:/config'
       - 'auth-tomcat-log:/var/log/auth-tomcat'
       - 'syslog:/var/log'
-    depends_on: [log]
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
 
   notification:
     restart: always
@@ -70,7 +92,11 @@ services:
     volumes:
       - 'service-config:/config'
       - 'syslog:/var/log'
-    depends_on: [log]
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
 
   fulfillment:
     restart: always
@@ -81,7 +107,11 @@ services:
     volumes:
       - 'service-config:/config'
       - 'syslog:/var/log'
-    depends_on: [log]
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
 
   cce:
     restart: always
@@ -92,18 +122,26 @@ services:
     volumes:
       - 'service-config:/config'
       - 'syslog:/var/log'
-    depends_on: [log]
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
 
   stockmanagement:
     restart: always
     image: openlmis/stockmanagement:${OL_STOCKMANAGEMENT_VERSION}
     env_file: settings.env
     environment:
-      JAVA_OPTS: '-server -Xmx2048m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
+      JAVA_OPTS: '-server -Xmx1536m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
     volumes:
       - 'service-config:/config'
       - 'syslog:/var/log'
-    depends_on: [log]
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
 
   report:
     restart: always
@@ -114,7 +152,11 @@ services:
     volumes:
       - 'service-config:/config'
       - 'syslog:/var/log'
-    depends_on: [log]
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
 
   hapifhir:
     restart: always
@@ -125,7 +167,11 @@ services:
     volumes:
       - 'service-config:/config'
       - 'syslog:/var/log'
-    depends_on: [log]
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
 
   log:
     restart: always
@@ -133,8 +179,10 @@ services:
     volumes:
       - 'syslog:/var/log'
     depends_on:
-      - service-configuration
-      - consul
+      service-configuration:
+        condition: service_started
+      consul:
+        condition: service_healthy
 
   service-configuration:
     build:
@@ -144,7 +192,9 @@ services:
 
   redis:
     image: redis:3.2.12
-    depends_on: [consul]
+    depends_on:
+      consul:
+        condition: service_healthy
 
 volumes:
   syslog:
