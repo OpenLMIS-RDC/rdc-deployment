@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-docker compose down
+set -e
+
 docker compose pull
 
-echo "Will keep data."
+docker compose down
 
-export spring_profiles_active="production"
-docker compose up --build --force-recreate -d
+docker compose up --force-recreate -d
