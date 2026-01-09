@@ -199,8 +199,9 @@ services:
     image: grafana/promtail:${PROMTAIL_VERSION}
     volumes:
       - ./config/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
-      - syslog:/app_logs:ro
       - /var/log:/var/log:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
     command: -config.file=/etc/promtail/promtail-config.yaml
     restart: unless-stopped
 
