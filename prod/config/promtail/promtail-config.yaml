@@ -13,24 +13,24 @@ scrape_configs:
     docker_sd_configs:
         - host: unix:///var/run/docker.sock
           refresh_interval: 5s
-relabel_configs:
-  - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
-    target_label: 'container'
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'container'
 
-  - source_labels: ['container', '__meta_docker_container_name']
-    separator: ';'
-    regex: ';/(.*)'
-    replacement: '$1'
-    target_label: 'container'
+      - source_labels: ['container', '__meta_docker_container_name']
+        separator: ';'
+        regex: ';/(.*)'
+        replacement: '$1'
+        target_label: 'container'
 
-  - source_labels: ['container', '__meta_docker_container_id']
-    separator: ';'
-    regex: ';(.{12}).*'
-    replacement: '$1'
-    target_label: 'container'
+      - source_labels: ['container', '__meta_docker_container_id']
+        separator: ';'
+        regex: ';(.{12}).*'
+        replacement: '$1'
+        target_label: 'container'
 
-  - target_label: 'host'
-    replacement: 'production'
+      - target_label: 'host'
+        replacement: 'production'
 
   - job_name: system
     static_configs:
