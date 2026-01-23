@@ -30,7 +30,7 @@ scrape_configs:
         target_label: 'container'
 
       - target_label: 'host'
-        replacement: 'production'
+        replacement: 'uat'
 
   - job_name: system
     static_configs:
@@ -38,5 +38,5 @@ scrape_configs:
           - localhost
         labels:
           job: varlogs
-          host: production
+          host: uat
           __path__: /var/log/*.log
