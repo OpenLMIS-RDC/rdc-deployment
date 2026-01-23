@@ -1,0 +1,42 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://34.245.193.199:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker_scrape
+    docker_sd_configs:
+        - host: unix:///var/run/docker.sock
+          refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'container'
+
+      - source_labels: ['container', '__meta_docker_container_name']
+        separator: ';'
+        regex: ';/(.*)'
+        replacement: '$1'
+        target_label: 'container'
+
+      - source_labels: ['container', '__meta_docker_container_id']
+        separator: ';'
+        regex: ';(.{12}).*'
+        replacement: '$1'
+        target_label: 'container'
+
+      - target_label: 'host'
+        replacement: 'production'
+
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: varlogs
+          host: production
+          __path__: /var/log/*.log
