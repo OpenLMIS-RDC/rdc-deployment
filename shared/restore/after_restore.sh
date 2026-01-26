@@ -12,7 +12,7 @@ set -e
 : ${SUPERSET_SECRET:?"Need to set SUPERSET_SECRET"}
 : ${CLIENT_REDIRECT_URI:?"Need to set CLIENT_REDIRECT_URI"}
 
-CLEAN_URL=$(echo "${DATABASE_URL}" | sed -e 's/^jdbc://' -e 's/postgresql:\/\///')
+CLEAN_URL=$(echo "${DATABASE_URL}" | sed -e 's/^jdbc://')
 
 sql=$(cat <<EOF
 UPDATE auth.auth_users SET password = '${ENCODED_USER_PASSWORD}';
@@ -28,8 +28,11 @@ echo "Executing clearing sensitive data..."
 
 export PGPASSWORD="${POSTGRES_PASSWORD}"
 
-psql "${URI_URL}" -U "${POSTGRES_USER}" -c "SELECT 1" > /dev/null 2>&1 || { echo "Error: Cannot connect to database"; exit 1; }
+psql "${CLEAN_URL}" -U "${POSTGRES_USER}" -c "SELECT 1" > /dev/null 2>&1 || {
+  echo "Error: Cannot connect to database"
+  exit 1
+}
 
-psql "${URI_URL}" -U "${POSTGRES_USER}" -c "$sql"
+psql "${CLEAN_URL}" -U "${POSTGRES_USER}" -c "$sql"
 
 echo "Success: Sensitive data cleared."
