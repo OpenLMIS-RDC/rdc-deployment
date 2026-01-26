@@ -28,6 +28,8 @@ echo "Executing clearing sensitive data..."
 
 export PGPASSWORD="${POSTGRES_PASSWORD}"
 
-psql -h "${DB_HOST}" -U "${POSTGRES_USER}" -d "${DB_NAME}" -c "$sql"
+psql "${URI_URL}" -U "${POSTGRES_USER}" -c "SELECT 1" > /dev/null 2>&1 || { echo "Error: Cannot connect to database"; exit 1; }
+
+psql "${URI_URL}" -U "${POSTGRES_USER}" -c "$sql"
 
 echo "Success: Sensitive data cleared."
