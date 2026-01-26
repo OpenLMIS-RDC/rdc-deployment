@@ -21,6 +21,7 @@ if [ "$KEEP_OR_RESTORE" == "restore" ]; then
 
   cd "$BASE_DIR/shared/restore"
   docker compose down -v
+  docker compose pull
   docker compose run --rm rds-restore
 
   echo "Pulling latest images and starting services..."
