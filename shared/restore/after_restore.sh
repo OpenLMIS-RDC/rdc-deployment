@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
-: ${DATABASE_URL:?"Need to set DATABASE_URL"}
+: ${DB_HOST:?"Need to set DB_HOST"}
+: ${DB_PORT:?"Need to set DB_PORT"}
+: ${DB_NAME:?"Need to set DB_NAME"}
 : ${POSTGRES_USER:?"Need to set POSTGRES_USER"}
 : ${POSTGRES_PASSWORD:?"Need to set POSTGRES_PASSWORD"}
 : ${ENCODED_USER_PASSWORD:?"Need to set ENCODED_USER_PASSWORD"}
@@ -12,10 +14,6 @@ set -e
 : ${SUPERSET_SECRET:?"Need to set SUPERSET_SECRET"}
 : ${CLIENT_REDIRECT_URI:?"Need to set CLIENT_REDIRECT_URI"}
 
-
-URL=`echo ${DATABASE_URL} | sed -E 's/^jdbc\:(.+)/\1/'` # jdbc:<url>
-: "${URL:?URL not parsed}"
-
 sql=$(cat <<EOF
 UPDATE auth.auth_users SET password = '${ENCODED_USER_PASSWORD}';
 UPDATE notification.user_contact_details SET email = NULL, phonenumber = NULL, allownotify = false;
@@ -25,9 +23,14 @@ UPDATE auth.oauth_client_details SET redirecturi = '${CLIENT_REDIRECT_URI}' WHER
 EOF
 )
 
-echo "Connecting to: ${URL} as ${POSTGRES_USER}"
+echo "Connecting to Host: ${DB_HOST}, Port: ${DB_PORT}, DB: ${DB_NAME} as ${POSTGRES_USER}"
 echo "Executing clearing sensitive data..."
 
-PGPASSWORD="${POSTGRES_PASSWORD}" psql ${URL} -U ${POSTGRES_USER} -c "$sql"
+PGPASSWORD="${POSTGRES_PASSWORD}" psql \
+    -h "${DB_HOST}" \
+    -p "${DB_PORT}" \
+    -d "${DB_NAME}" \
+    -U "${POSTGRES_USER}" \
+    -c "$sql"
 
 echo "Success: Sensitive data cleared."
