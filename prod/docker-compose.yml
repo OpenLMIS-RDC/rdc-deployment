@@ -192,6 +192,7 @@ services:
     restart: unless-stopped
     volumes:
       - '/:/host:ro,rslave'
+      - '/run/udev/data:/run/udev/data:ro'
     ports:
       - "9100:9100"
 
