@@ -14,12 +14,17 @@ set -e
 : ${SUPERSET_SECRET:?"Need to set SUPERSET_SECRET"}
 : ${CLIENT_REDIRECT_URI:?"Need to set CLIENT_REDIRECT_URI"}
 
+: ${DASHBOARD_URL_PATTERN:?"Need to set DASHBOARD_URL_PATTERN"}
+: ${REPLACE_FROM:?"Need to set REPLACE_FROM"}
+: ${REPLACE_TO:?"Need to set REPLACE_TO"}
+
 sql=$(cat <<EOF
 UPDATE auth.auth_users SET password = '${ENCODED_USER_PASSWORD}';
 UPDATE notification.user_contact_details SET email = NULL, phonenumber = NULL, allownotify = false;
 UPDATE auth.oauth_client_details SET clientid = '${SERVICE_CLIENT_ID}', clientsecret = '${SERVICE_CLIENT_SECRET}' WHERE clientid = 'production-service-client';
 UPDATE auth.oauth_client_details SET clientsecret = '${SUPERSET_SECRET}' WHERE clientid = 'superset';
 UPDATE auth.oauth_client_details SET redirecturi = '${CLIENT_REDIRECT_URI}' WHERE clientid = 'superset';
+UPDATE report.dashboard_reports SET url = replace(url, '${REPLACE_FROM}', '${REPLACE_TO}') WHERE url LIKE '${DASHBOARD_URL_PATTERN}';
 EOF
 )
 
