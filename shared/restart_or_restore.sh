@@ -24,15 +24,21 @@ if [ "$KEEP_OR_RESTORE" == "restore" ]; then
   docker compose pull
   docker compose run --rm rds-restore
 
-  echo "Pulling latest images and starting services..."
+  echo "Database restoration complete."
 else
-  echo "Restarting services"
+  echo "Skipping database restore (Restarting services only)."
 fi
 
 echo "Navigating to: $ENV_PATH"
 cd "$ENV_PATH"
 
+echo "Cleaning up existing containers and volumes for $TARGET_ENV..."
+docker compose down -v
+
+echo "Pulling latest images..."
 docker compose pull
+
+echo "Starting services..."
 docker compose up --build --force-recreate -d
 
 echo "Successfully deployed to $TARGET_ENV."
