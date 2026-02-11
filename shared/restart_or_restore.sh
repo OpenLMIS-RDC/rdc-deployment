@@ -33,6 +33,6 @@ echo "Navigating to: $ENV_PATH"
 cd "$ENV_PATH"
 
 docker compose pull
-docker compose up --force-recreate -d
+docker compose up --build --force-recreate -d
 
 echo "Successfully deployed to $TARGET_ENV."
