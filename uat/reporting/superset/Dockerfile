@@ -17,7 +17,7 @@ ENV GUNICORN_BIND=0.0.0.0:8088 \
     GUNICORN_WORKERS=2 \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    PYTHONPATH=/etc/superset:/home/superset:$PYTHONPATH \
+    PYTHONPATH=/etc/superset:/home/superset \
     SUPERSET_REPO=apache/superset \
     SUPERSET_VERSION=${SUPERSET_VERSION} \
     SUPERSET_PATCHUP_VERSION=${SUPERSET_PATCHUP_VERSION} \
@@ -63,8 +63,6 @@ RUN useradd -U -m superset && \
         flask-mail==0.9.1 \
         flask-oauth==0.12 \
         flask_oauthlib==0.9.5 && \
-    # MarkupSafe, fix missing 'soft_unicode' from 'markupsafe'
-    # fix cryptography, flask, werkzeug to last known working versions
     pip install -I --no-cache-dir \
         MarkupSafe==2.0.1 \
         cryptography==38.0.2 \
@@ -98,10 +96,10 @@ RUN npm -v
 # Copy OpenLMIS Customization
 COPY app-customizations/$SUPERSET_VERSION $APP_DIR
 
-# Installing dependecies via npm
+# Installing dependencies via npm
 RUN npm install -g po2json
 
-# Fetching dependecies and first build
+# Fetching dependencies and first build
 RUN wget -P /tmp https://github.com/apache/superset/archive/${SUPERSET_VERSION}.zip \
     && unzip /tmp/${SUPERSET_VERSION}.zip -d /tmp \
     && rsync -a \
