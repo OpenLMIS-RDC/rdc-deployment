@@ -43,26 +43,24 @@ services:
         syslog-address: "udp://127.0.0.1:${SYSLOG_UDP_PORT}"
     depends_on: [consul, log, config-container]
 
-  superset:
-    build:
-      context: ./superset
-      args:
-        SUPERSET_VERSION: ${OL_SUPERSET_VERSION}
-        SUPERSET_PATCHUP_VERSION: ${OL_SUPERSET_PATCHUP_VERSION}
+  nifi:
+    image: apache/nifi:${OL_NIFI_VERSION}
     ports:
-      - "8088:8088"
-    environment:
-      - JAVA_OPTS=-Xmx2048m
+      - "8080:8080"
     volumes:
       - config-volume:/config
-    command: >
-      bash -c "cp -r /config/superset /etc/
-      && sh /etc/superset/init.sh"
+      - ./nifi-cache:/tmp/nifi-docker-cache
+    entrypoint: >
+      bash -c "/config/nifi/scripts/start.sh ${OL_NIFI_VERSION}"
+    environment:
+      - JAVA_OPTS=-Xmx1024m
+      - NIFI_JVM_HEAP_INIT=${NIFI_JVM_HEAP_INIT}
+      - NIFI_JVM_HEAP_MAX=${NIFI_JVM_HEAP_MAX}
     logging:
       driver: syslog
       options:
         syslog-address: "udp://127.0.0.1:${SYSLOG_UDP_PORT}"
-    depends_on: [ db, config-container, nginx ]
+    depends_on: [log, config-container, nginx]
     env_file: settings.env
 
   db-service-configuration:
@@ -87,7 +85,7 @@ services:
       default:
         aliases:
           - reporting-db
-    depends_on: [log,db-service-configuration]
+    depends_on: [log, db-service-configuration]
 
   cron-config:
     build:
@@ -105,7 +103,7 @@ services:
       driver: syslog
       options:
         syslog-address: "udp://127.0.0.1:${SYSLOG_UDP_PORT}"
-    depends_on: [log,cron-config]
+    depends_on: [log, cron-config]
 
   zookeeper:
     image: confluentinc/cp-zookeeper:${OL_CONFLUENT_VERSION}
@@ -135,7 +133,7 @@ services:
       driver: syslog
       options:
         syslog-address: "udp://127.0.0.1:${SYSLOG_UDP_PORT}"
-    depends_on: [log,config-container,zookeeper]
+    depends_on: [log, config-container, zookeeper]
 
   connect:
     image: openlmis/debezium-connect
@@ -145,6 +143,12 @@ services:
       - JAVA_OPTS=-Xmx1024m
       - BOOTSTRAP_SERVERS=kafka:29092
       - GROUP_ID=1
+      - CONNECT_PRODUCER_REQUEST_TIMEOUT_MS=60000
+      - CONNECT_PRODUCER_DELIVERY_TIMEOUT_MS=120000
+      - CONNECT_CONSUMER_SESSION_TIMEOUT_MS=30000
+      - CONNECT_CONSUMER_HEARTBEAT_INTERVAL_MS=10000
+      - CONNECT_OFFSET_FLUSH_TIMEOUT_MS=60000
+      - CONNECT_OFFSET_FLUSH_INTERVAL_MS=60000
       - CONFIG_STORAGE_TOPIC=my_connect_configs
       - OFFSET_STORAGE_TOPIC=my_connect_offsets
       - HOST_NAME=0.0.0.0
@@ -198,6 +202,28 @@ services:
         syslog-address: "udp://127.0.0.1:${SYSLOG_UDP_PORT}"
     depends_on: [kafka-rest]
 
+  superset:
+    build:
+      context: ./superset
+      args:
+        SUPERSET_VERSION: ${OL_SUPERSET_VERSION}
+        SUPERSET_PATCHUP_VERSION: ${OL_SUPERSET_PATCHUP_VERSION}
+    ports:
+      - "8088:8088"
+    environment:
+      - JAVA_OPTS=-Xmx2048m
+    volumes:
+      - config-volume:/config
+    command: >
+      bash -c "cp -r /config/superset /etc/
+      && sh /etc/superset/init.sh"
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "udp://127.0.0.1:${SYSLOG_UDP_PORT}"
+    depends_on: [db, config-container, nginx]
+    env_file: settings.env
+
   node-exporter:
     image: prom/node-exporter:${OL_NODE_EXPORTER_VERSION}
     command:
@@ -207,8 +233,6 @@ services:
     volumes:
       - '/:/host:ro,rslave'
       - '/run/udev/data:/run/udev/data:ro'
-    ports:
-      - "9100:9100"
 
 volumes:
   syslog:
