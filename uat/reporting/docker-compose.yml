@@ -74,7 +74,6 @@ services:
     env_file: settings.env
     volumes:
       - db-config-volume:/docker-entrypoint-initdb.d
-      - pgdata:/var/lib/postgresql/data
     ports:
       - "${REPORTING_POSTGRES_PORT:-5432}:5432"
     logging:
@@ -243,5 +242,3 @@ volumes:
     external: false
   cron-periodic-volume:
     external: false
-  pgdata:
-    external: true
