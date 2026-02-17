@@ -111,7 +111,14 @@ RUN wget -P /tmp https://github.com/apache/superset/archive/${SUPERSET_VERSION}.
     && rm -r /tmp/${SUPERSET_VERSION}.zip
 
 USER superset:superset
-RUN cd $APP_DIR/superset-frontend && npm ci && npm run build && cp -r ../superset/static/assets ../static
+WORKDIR $APP_DIR/superset-frontend
+
+RUN npm ci
+
+RUN npm run build && \
+    cp -r ../superset/static/assets ../static && \
+    rm -rf node_modules && \
+    npm cache clean --force
 
 # Deploy application
 EXPOSE 8088
