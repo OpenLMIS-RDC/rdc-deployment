@@ -210,6 +210,12 @@ services:
     ports:
       - "9100:9100"
 
+  powerbi-nginx:
+    image: nginx:alpine
+    container_name: powerbi-nginx
+    volumes:
+      - ./powerbi:/usr/share/nginx/html:ro
+
 volumes:
   syslog:
     external: false

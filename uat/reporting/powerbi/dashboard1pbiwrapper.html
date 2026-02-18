@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Logimev Dashboard - Power BI</title>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+    iframe {
+      border: 0;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+
+  <!-- OpenLMIS a le droit d’iframer cette page -->
+  <meta http-equiv="Content-Security-Policy"
+        content="
+          frame-ancestors https://openlmis.inopas.com;
+          frame-src https://app.powerbi.com;
+        ">
+</head>
+
+<body>
+  <iframe
+    src="https://app.powerbi.com/view?r=eyJrIjoiMTZmNGFhYmItN2Q2Mi00ZDE2LWJhMTctOWIyMDBmNWI1MjQyIiwidCI6IjNjNDdiNGEzLWZlOTktNDAyNC04ZGE3LTU0YjU4YmM1NjUwZCJ9"
+    allowfullscreen="true">
+  </iframe>
+</body>
+</html>
