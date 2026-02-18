@@ -211,6 +211,7 @@ services:
       - "8088:8088"
     environment:
       - JAVA_OPTS=-Xmx2048m
+      - FLASK_APP=superset
     volumes:
       - config-volume:/config
     command: >

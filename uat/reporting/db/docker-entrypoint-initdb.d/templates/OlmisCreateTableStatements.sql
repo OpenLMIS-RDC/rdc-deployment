@@ -2078,6 +2078,22 @@ CREATE TABLE reporting_dates (
 
 ALTER TABLE reporting_dates OWNER TO postgres;
 
+-- Fix Dates
+ALTER TABLE public.kafka_status_changes
+ALTER COLUMN createddate TYPE TEXT,
+    ALTER COLUMN modifieddate TYPE TEXT;
+
+ALTER TABLE public.kafka_requisitions
+ALTER COLUMN createddate TYPE TEXT,
+    ALTER COLUMN modifieddate TYPE TEXT,
+    ALTER COLUMN datephysicalstockcountcompleted TYPE TEXT;
+
+ALTER TABLE public.kafka_orderables
+ALTER COLUMN lastupdated TYPE TEXT;
+
+ALTER TABLE public.kafka_processing_schedules
+ALTER COLUMN modifieddate TYPE TEXT;
+
 ---
 --- Name: view_facility_access; Type: TABLE; Schema: public; Owner: postgres
 ---
