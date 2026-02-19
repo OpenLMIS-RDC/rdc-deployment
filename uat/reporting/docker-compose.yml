@@ -203,12 +203,13 @@ services:
     command:
       - '--path.rootfs=/host'
     pid: host
+    network_mode: host  # switched from ports to host network because docker did not map the port correctly
     restart: unless-stopped
     volumes:
       - '/:/host:ro,rslave'
       - '/run/udev/data:/run/udev/data:ro'
-    ports:
-      - "9100:9100"
+#    ports:
+#      - "9100:9100"
 
 volumes:
   syslog:
