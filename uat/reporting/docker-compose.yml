@@ -74,15 +74,15 @@ services:
     env_file: settings.env
     volumes:
       - db-config-volume:/docker-entrypoint-initdb.d
-      - /uat/reporting/ssl/root.crt:/var/lib/postgresql/root.crt:ro
-      - /uat/reporting/ssl/server.crt:/var/lib/postgresql/server.crt:ro
-      - /uat/reporting/ssl/server.key:/var/lib/postgresql/server.key:ro
+      - ./ssl/root.crt:/ssl/root.crt:ro
+      - ./ssl/server.crt:/ssl/server.crt:ro
+      - ./ssl/server.key:/ssl/server.key:ro
     command: >
       postgres 
       -c ssl=on
-      -c ssl_cert_file=/var/lib/postgresql/server.crt
-      -c ssl_key_file=/var/lib/postgresql/server.key
-      -c ssl_ca_file=/var/lib/postgresql/root.crt
+      -c ssl_cert_file=/ssl/server.crt
+      -c ssl_key_file=/ssl/server.key
+      -c ssl_ca_file=/ssl/root.crt
       -c wal_level=logical
     ports:
       - "${REPORTING_POSTGRES_PORT:-5432}:5432"
