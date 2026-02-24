@@ -74,9 +74,9 @@ services:
     env_file: settings.env
     volumes:
       - db-config-volume:/docker-entrypoint-initdb.d
-      - ./ssl/root.crt:/ssl/root.crt:ro
-      - ./ssl/server.crt:/ssl/server.crt:ro
-      - ./ssl/server.key:/ssl/server.key:ro
+      - /opt/pgssl/root.crt:/ssl/root.crt:ro
+      - /opt/pgssl/server.crt:/ssl/server.crt:ro
+      - /opt/pgssl/server.key:/ssl/server.key:ro
     command: >
       postgres 
       -c ssl=on
