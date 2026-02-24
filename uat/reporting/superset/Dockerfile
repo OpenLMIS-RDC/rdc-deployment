@@ -30,7 +30,7 @@ ENV GUNICORN_CMD_ARGS="--workers ${GUNICORN_WORKERS} -k ${WORKER_CLASS} --timeou
 COPY requirements.txt requirements.txt
 
 # Create superset user & install dependencies
-RUN useradd -l -U -m superset && \
+RUN useradd -U -m superset && \
     mkdir /etc/superset  && \
     mkdir ${SUPERSET_HOME} && \
     chown -R superset:superset /etc/superset && \
@@ -111,13 +111,7 @@ RUN wget -P /tmp https://github.com/apache/superset/archive/${SUPERSET_VERSION}.
     && rm -r /tmp/${SUPERSET_VERSION}.zip
 
 USER superset:superset
-RUN cd $APP_DIR/superset-frontend && \
-    npm ci && \
-    export NODE_OPTIONS="--max-old-space-size=6144" && \
-    npm run build -- --parallel=2 && \
-    cp -r ../superset/static/assets ../static && \
-    rm -rf node_modules && \
-    npm cache clean --force
+RUN cd $APP_DIR/superset-frontend && npm ci && npm run build && cp -r ../superset/static/assets ../static
 
 # Deploy application
 EXPOSE 8088
