@@ -114,7 +114,6 @@ USER superset:superset
 RUN cd $APP_DIR/superset-frontend && \
     npm ci && \
     export NODE_OPTIONS="--max-old-space-size=6144" && \
-    npm run build -- --parallel=2 && \
     cp -r ../superset/static/assets ../static && \
     rm -rf node_modules && \
     npm cache clean --force
