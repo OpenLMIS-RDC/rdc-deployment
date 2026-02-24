@@ -7,5 +7,5 @@ export DOCKER_CERT_PATH="${PWD}/credentials"
 # docker volume create pgdata
 
 docker compose down -v --remove-orphans
-docker compose build --no-cache
+DOCKER_BUILDKIT=0 docker compose build --no-cache
 docker compose up -d
