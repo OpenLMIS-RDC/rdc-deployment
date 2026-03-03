@@ -58,13 +58,15 @@ SELECT
     ft.name              AS facility_type_name,
     fo.id                AS facility_operator_id,
     fo.code              AS facility_operator_code,
-    fo.name              AS facility_operator_name
+    fo.name              AS facility_operator_name,
+    gl.name              AS geographic_level
 FROM public.kafka_facilities f
 LEFT JOIN public.kafka_geographic_zones dgz  ON dgz.id = f.geographiczoneid
 LEFT JOIN public.kafka_geographic_zones rgz  ON rgz.id = dgz.parentid
 LEFT JOIN public.kafka_geographic_zones cgz  ON cgz.id = rgz.parentid
 LEFT JOIN public.kafka_facility_types ft     ON ft.id  = f.typeid
 LEFT JOIN public.kafka_facility_operators fo ON fo.id  = f.operatedbyid
+LEFT JOIN kafka_geographic_levels gl ON gl.id = dgz.levelid
 WITH DATA;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_dim_facility_facility_id
