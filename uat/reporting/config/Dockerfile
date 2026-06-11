@@ -6,4 +6,3 @@ COPY ./init.sh /init.sh
 RUN apk add --no-cache curl
 
 CMD /bin/true
-

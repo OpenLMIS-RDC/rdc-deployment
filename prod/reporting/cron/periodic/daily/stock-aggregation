@@ -31,14 +31,15 @@ export PGPORT=$PORT
 export PGDATABASE=$DB
 export PGUSER=$POSTGRES_USER
 
-echo "Refreshing reporting stack materialized views..."
+echo "$(date): Lancement de l'agrégation journalière PAR PRODUIT (Schéma analytics)..."
+
 psql <<-EOSQL
-  REFRESH MATERIALIZED VIEW view_facility_access;
-  REFRESH MATERIALIZED VIEW reporting_rate_and_timeliness;
-  REFRESH MATERIALIZED VIEW adjustments;
-  REFRESH MATERIALIZED VIEW stock_status_and_consumption;
-  REFRESH MATERIALIZED VIEW facilities;
-  REFRESH MATERIALIZED VIEW stock_adjustments_view;
-  REFRESH MATERIALIZED VIEW analytics.dim_facility;
-  REFRESH MATERIALIZED VIEW analytics.dim_product;
+  SELECT analytics.refresh_daily_stock_history(CURRENT_DATE - 1);
 EOSQL
+
+if [ $? -eq 0 ]; then
+    echo "$(date): Succès de l'agrégation."
+else
+    echo "$(date): ERREUR lors de l'agrégation (analytics). Vérifiez la table analytics.audit_daily_batch."
+    exit 1
+fi

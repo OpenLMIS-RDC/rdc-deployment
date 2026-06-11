@@ -17,7 +17,7 @@ ENV GUNICORN_BIND=0.0.0.0:8088 \
     GUNICORN_WORKERS=2 \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    PYTHONPATH=/etc/superset:/home/superset:$PYTHONPATH \
+    PYTHONPATH=/etc/superset:/home/superset \
     SUPERSET_REPO=apache/superset \
     SUPERSET_VERSION=${SUPERSET_VERSION} \
     SUPERSET_PATCHUP_VERSION=${SUPERSET_PATCHUP_VERSION} \
@@ -98,10 +98,10 @@ RUN npm -v
 # Copy OpenLMIS Customization
 COPY app-customizations/$SUPERSET_VERSION $APP_DIR
 
-# Installing dependecies via npm
+# Installing dependencies via npm
 RUN npm install -g po2json
 
-# Fetching dependecies and first build
+# Fetching dependencies and first build
 RUN wget -P /tmp https://github.com/apache/superset/archive/${SUPERSET_VERSION}.zip \
     && unzip /tmp/${SUPERSET_VERSION}.zip -d /tmp \
     && rsync -a \
