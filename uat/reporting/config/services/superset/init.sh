@@ -18,6 +18,10 @@ done
 >&2 echo "Postgres is up"
 
 # App initialization
+# Run the Flask CLI from outside the `superset` package dir; otherwise, when the
+# image's WORKDIR is the package dir, FLASK_APP=superset resolves to the bogus
+# module "superset.superset" and `flask fab` fails.
+cd /
 flask fab create-admin --username ${SUPERSET_ADMIN_USERNAME} --firstname Admin --lastname Admin --email noreply --password ${SUPERSET_ADMIN_PASSWORD} &&
 
 superset db upgrade &&
