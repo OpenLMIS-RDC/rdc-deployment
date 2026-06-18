@@ -11,6 +11,7 @@
     "database.dbname": "open_lmis",
     "database.server.name": "openlmis",
     "table.whitelist": "public\\.debezium_heartbeat,fulfillment\\.orders,fulfillment\\.status_changes,fulfillment\\.order_line_items,fulfillment\\.shipments,fulfillment\\.proofs_of_delivery,fulfillment\\.proof_of_delivery_line_items",
+    "message.key.columns": "fulfillment.status_changes:id",
     "database.history.kafka.bootstrap.servers": "kafka:29092",
     "database.history.kafka.topic": "openlmis",
     "slot.name": "dbz_fulfillment",
