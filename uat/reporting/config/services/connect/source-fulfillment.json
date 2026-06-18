@@ -1,0 +1,31 @@
+{
+  "name": "source-fulfillment",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+    "plugin.name": "wal2json",
+    "database.hostname": "olmis-db",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.password": "p@ssw0rd",
+    "database.dbname": "open_lmis",
+    "database.server.name": "openlmis",
+    "table.whitelist": "public\\.debezium_heartbeat,fulfillment\\.orders,fulfillment\\.status_changes,fulfillment\\.order_line_items,fulfillment\\.shipments,fulfillment\\.proof_of_deliveries,fulfillment\\.proof_of_delivery_line_items",
+    "database.history.kafka.bootstrap.servers": "kafka:29092",
+    "database.history.kafka.topic": "openlmis",
+    "slot.name": "dbz_fulfillment",
+    "time.precision.mode": "connect",
+    "heartbeat.interval.ms": 3000,
+    "heartbeat.action.query": "CREATE TABLE IF NOT EXISTS debezium_heartbeat (id SERIAL PRIMARY KEY, ts TIMESTAMPTZ); INSERT INTO debezium_heartbeat (id, ts) VALUES (1, NOW()) ON CONFLICT(id) DO UPDATE SET ts=NOW();",
+    "transforms": "unwrap,route,routeStatusChanges",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "false",
+    "transforms.unwrap.delete.handling.mode": "none",
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": "([^.]+)\\.([^.]+)\\.([^.]+)",
+    "transforms.route.replacement": "public.kafka_$3",
+    "transforms.routeStatusChanges.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.routeStatusChanges.regex": "public\\.kafka_status_changes",
+    "transforms.routeStatusChanges.replacement": "public.kafka_order_status_changes"
+  }
+}
