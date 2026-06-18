@@ -35,6 +35,33 @@ DROP MATERIALIZED VIEW IF EXISTS analytics.dim_product CASCADE;
 
 -- 2.1 Dimension Etablissement (Facility) + hierarchie geographique
 CREATE MATERIALIZED VIEW analytics.dim_facility AS
+WITH RECURSIVE geo_hierarchy AS (
+        SELECT
+            gz.id        AS start_zone_id,
+            gz.id        AS current_id,
+            gz.parentid,
+            gz.levelid
+        FROM public.kafka_geographic_zones gz
+    UNION ALL
+        SELECT
+            gh.start_zone_id,
+            gz.id,
+            gz.parentid,
+            gz.levelid
+        FROM geo_hierarchy gh
+        JOIN public.kafka_geographic_zones gz ON gh.parentid = gz.id
+),
+geo_mapped AS (
+    SELECT
+        gh.start_zone_id,
+        max(CASE WHEN gl_1.code = 'PROV' THEN gz.name ELSE NULL END) AS province_name,
+        max(CASE WHEN gl_1.code = 'ZS'   THEN gz.name ELSE NULL END) AS health_zone_name,
+        max(CASE WHEN gl_1.code = 'AS'   THEN gz.name ELSE NULL END) AS health_area_name
+    FROM geo_hierarchy gh
+    JOIN public.kafka_geographic_zones gz    ON gh.current_id = gz.id
+    JOIN public.kafka_geographic_levels gl_1 ON gz.levelid = gl_1.id
+    GROUP BY gh.start_zone_id
+)
 SELECT
     f.id                 AS facility_id,
     f.code               AS facility_code,
@@ -59,7 +86,11 @@ SELECT
     fo.id                AS facility_operator_id,
     fo.code              AS facility_operator_code,
     fo.name              AS facility_operator_name,
-    gl.name              AS geographic_level
+    dgz.name             AS geographic_zone_name,
+    gl.name              AS geographic_level,
+    m.province_name,
+    m.health_zone_name,
+    m.health_area_name
 FROM public.kafka_facilities f
 LEFT JOIN public.kafka_geographic_zones dgz  ON dgz.id = f.geographiczoneid
 LEFT JOIN public.kafka_geographic_zones rgz  ON rgz.id = dgz.parentid
@@ -67,6 +98,7 @@ LEFT JOIN public.kafka_geographic_zones cgz  ON cgz.id = rgz.parentid
 LEFT JOIN public.kafka_facility_types ft     ON ft.id  = f.typeid
 LEFT JOIN public.kafka_facility_operators fo ON fo.id  = f.operatedbyid
 LEFT JOIN kafka_geographic_levels gl ON gl.id = dgz.levelid
+LEFT JOIN geo_mapped m ON m.start_zone_id = f.geographiczoneid
 WITH DATA;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_dim_facility_facility_id
