@@ -1,6 +1,6 @@
 services:
   rds-restore:
-    image: openlmisrdc/rds-restore:1.0
+    image: openlmisrdc/rds-restore:1.1
     env_file: .env-restore
     volumes:
       - restore-config:/external:ro
