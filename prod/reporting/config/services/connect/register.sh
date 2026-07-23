@@ -29,12 +29,21 @@ POSTGRES_PORT=`echo ${DATABASE_URL} | sed -E 's/^.*\:([0-9]+)\/.*$/\1/'` # :<por
 POSTGRES_DB=`echo ${DATABASE_URL} | sed -E 's/^.*\/(.+)\?*$/\1/'` # /<db>?
 : "${POSTGRES_DB:?DB not set}"
 
+# JDBC sinks need stringtype=unspecified so string-bound keys (e.g. uuid PK columns)
+# coerce correctly on DELETE/UPSERT; without it Postgres errors "operator does not
+# exist: uuid = character varying". Append it to DATABASE_URL if not already present.
+case "$DATABASE_URL" in
+  *stringtype=*) SINK_DBURL="$DATABASE_URL" ;;
+  *\?*)          SINK_DBURL="${DATABASE_URL}&stringtype=unspecified" ;;
+  *)             SINK_DBURL="${DATABASE_URL}?stringtype=unspecified" ;;
+esac
+
 echo -e "\n\nReplacing database info of sink JSON files, then registering"
 for f in /config/connect/sink-*.json
 do
   echo -e "\n\nProcessing $f file..."
   mv $f temp.json
-  jq -r --arg dburl "$DATABASE_URL" --arg dbuser "$POSTGRES_USER" --arg dbpassword "$POSTGRES_PASSWORD" '.config["connection.url"] |= $dburl | .config["connection.user"] |= $dbuser | .config["connection.password"] |= $dbpassword' temp.json > $f
+  jq -r --arg dburl "$SINK_DBURL" --arg dbuser "$POSTGRES_USER" --arg dbpassword "$POSTGRES_PASSWORD" '.config["connection.url"] |= $dburl | .config["connection.user"] |= $dbuser | .config["connection.password"] |= $dbpassword' temp.json > $f
   rm temp.json
   curl -s -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://connect:8083/connectors/ -d @$f
 done

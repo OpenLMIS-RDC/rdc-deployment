@@ -852,11 +852,16 @@ ALTER TABLE ONLY public.kafka_requisition_groups
 
 
 --
--- Name: right_assignments right_assignment_unq; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: right_assignments right_assignment_ra_idx; Type: INDEX; Schema: public; Owner: postgres
+-- NOTE: kafka_right_assignments is a CDC (Debezium/JDBC-sink) mirror table. The upstream
+-- UNIQUE (rightname, facilityid, programid, userid) constraint was replaced with a plain
+-- index: OpenLMIS regenerates right_assignments as delete-old + insert-new-with-a-new-id,
+-- and Kafka does not guarantee the DELETE is applied before the colliding INSERT, so the
+-- JDBC sink (which only resolves ON CONFLICT (id)) failed with "duplicate key value
+-- violates unique constraint right_assignment_unq". The source system enforces uniqueness.
 --
 
-ALTER TABLE ONLY public.kafka_right_assignments
-    ADD CONSTRAINT right_assignment_unq UNIQUE (rightname, facilityid, programid, userid);
+CREATE INDEX right_assignment_ra_idx ON public.kafka_right_assignments USING btree (rightname, facilityid, programid, userid);
 
 
 --
