@@ -66,6 +66,18 @@ variable "extra_public_tcp_ports" {
   default     = []
 }
 
+variable "monitoring_cidrs" {
+  description = "CIDRs of the monitoring server allowed to scrape metrics endpoints"
+  type        = list(string)
+  default     = []
+}
+
+variable "monitoring_ports" {
+  description = "Metrics ports opened to monitoring_cidrs: node-exporter (9100), cadvisor (9180)"
+  type        = list(number)
+  default     = [9100, 9180]
+}
+
 variable "create_db" {
   description = "Whether to create an RDS PostgreSQL instance"
   type        = bool

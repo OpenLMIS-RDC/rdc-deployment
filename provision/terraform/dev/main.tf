@@ -28,6 +28,7 @@ module "dev" {
   admin_cidrs    = var.admin_cidrs
 
   extra_public_tcp_ports = var.reporting_ports
+  monitoring_cidrs       = var.monitoring_cidrs
 
   create_db               = var.create_db
   db_vpc_id               = var.db_vpc_id

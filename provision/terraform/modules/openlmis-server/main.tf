@@ -72,6 +72,17 @@ resource "aws_security_group" "app" {
     }
   }
 
+  dynamic "ingress" {
+    for_each = length(var.monitoring_cidrs) > 0 ? toset(var.monitoring_ports) : []
+    content {
+      description = "Metrics port ${ingress.value} for monitoring"
+      from_port   = ingress.value
+      to_port     = ingress.value
+      protocol    = "tcp"
+      cidr_blocks = var.monitoring_cidrs
+    }
+  }
+
   egress {
     from_port   = 0
     to_port     = 0

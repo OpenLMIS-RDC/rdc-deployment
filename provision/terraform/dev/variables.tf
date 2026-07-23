@@ -102,6 +102,12 @@ variable "reporting_ports" {
   default     = [8088, 8443]
 }
 
+variable "monitoring_cidrs" {
+  description = "CIDRs of the monitoring server allowed to scrape node-exporter/cadvisor"
+  type        = list(string)
+  default     = []
+}
+
 variable "db_username" {
   description = "Required when create_db is true"
   type        = string
