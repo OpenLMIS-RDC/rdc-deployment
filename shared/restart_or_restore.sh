@@ -10,7 +10,7 @@ if [ -z "$BASE_DIR" ]; then
 fi
 
 if [[ -z "$TARGET_ENV" ]]; then
-  echo "Error: Could not determine TARGET_ENV. [uat|prod]"
+  echo "Error: Could not determine TARGET_ENV. [uat|prod|dev]"
   exit 1
 fi
 

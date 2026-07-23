@@ -1,0 +1,246 @@
+services:
+
+  consul:
+    command: -server -bootstrap
+    image: gliderlabs/consul-server
+    ports:
+      - "8300"
+      - "8400"
+      - "8500:8500"
+      - "53"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-s", "http://127.0.0.1:8500/v1/status/leader"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+
+  nginx:
+    image: openlmis/nginx:${OL_NGINX_VERSION}
+    ports:
+      - "80:80"
+    env_file: settings.env
+    environment:
+      NGINX_LOG_DIR: '/var/log/nginx/log'
+    volumes:
+      - 'nginx-log:/var/log/nginx/log'
+      - 'consul-template-log:/var/log/consul-template'
+    depends_on:
+      consul:
+        condition: service_healthy
+
+  ui:
+    restart: always
+    image: openlmisrdc/ui:${DRC_UI_VERSION}
+    env_file: settings.env
+    depends_on:
+      consul:
+        condition: service_healthy
+
+  requisition:
+    restart: always
+    image: openlmis/requisition:${OL_REQUISITION_VERSION}
+    env_file: settings.env
+    environment:
+      JAVA_OPTS: '-server -Xmx1536m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
+    volumes:
+      - 'service-config:/config'
+      - 'syslog:/var/log'
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
+
+  referencedata:
+    restart: always
+    image: openlmis/referencedata:${OL_REFERENCEDATA_VERSION}
+    env_file: settings.env
+    environment:
+      JAVA_OPTS: '-server -Xmx1536m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
+    volumes:
+      - 'service-config:/config'
+      - 'syslog:/var/log'
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
+
+  auth:
+    restart: always
+    image: openlmis/auth:${OL_AUTH_VERSION}
+    env_file: settings.env
+    environment:
+      JAVA_OPTS: '-server -Xmx512m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
+    volumes:
+      - 'service-config:/config'
+      - 'auth-tomcat-log:/var/log/auth-tomcat'
+      - 'syslog:/var/log'
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
+
+  notification:
+    restart: always
+    image: openlmis/notification:${OL_NOTIFICATION_VERSION}
+    env_file: settings.env
+    environment:
+      JAVA_OPTS: '-server -Xmx512m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
+    volumes:
+      - 'service-config:/config'
+      - 'syslog:/var/log'
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
+
+  fulfillment:
+    restart: always
+    image: openlmis/fulfillment:${OL_FULFILLMENT_VERSION}
+    env_file: settings.env
+    environment:
+      JAVA_OPTS: '-server -Xmx1024m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
+    volumes:
+      - 'service-config:/config'
+      - 'syslog:/var/log'
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
+
+  cce:
+    restart: always
+    image: openlmis/cce:${OL_CCE_VERSION}
+    env_file: settings.env
+    environment:
+      JAVA_OPTS: '-server -Xmx1024m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
+    volumes:
+      - 'service-config:/config'
+      - 'syslog:/var/log'
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
+
+  stockmanagement:
+    restart: always
+    image: openlmis/stockmanagement:${OL_STOCKMANAGEMENT_VERSION}
+    env_file: settings.env
+    environment:
+      JAVA_OPTS: '-server -Xmx1536m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
+    volumes:
+      - 'service-config:/config'
+      - 'syslog:/var/log'
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
+
+  report:
+    restart: always
+    image: openlmisrdc/report:${DRC_REPORT_VERSION}
+    env_file: settings.env
+    environment:
+      JAVA_OPTS: '-server -Xmx2560m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
+    volumes:
+      - 'service-config:/config'
+      - 'syslog:/var/log'
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
+
+  hapifhir:
+    restart: always
+    image: openlmis/hapifhir:${OL_HAPIFHIR_VERSION}
+    env_file: settings.env
+    environment:
+      JAVA_OPTS: '-server -Xmx512m -Dlogging.config=/config/log/logback.xml'
+    volumes:
+      - 'service-config:/config'
+      - 'syslog:/var/log'
+    depends_on:
+      log:
+        condition: service_started
+      consul:
+        condition: service_healthy
+
+  log:
+    restart: always
+    image: openlmis/rsyslog:${OL_RSYSLOG_VERSION}
+    volumes:
+      - 'syslog:/var/log'
+    depends_on:
+      service-configuration:
+        condition: service_started
+      consul:
+        condition: service_healthy
+
+  node-exporter:
+    image: prom/node-exporter:${NODE_EXPORTER_VERSION}
+    command:
+      - '--path.rootfs=/host'
+    pid: host
+    restart: unless-stopped
+    volumes:
+      - '/:/host:ro,rslave'
+    ports:
+      - "9100:9100"
+
+  promtail:
+    image: grafana/promtail:${PROMTAIL_VERSION}
+    volumes:
+      - ./config/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      - /var/log:/var/log:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:${CADVISOR_VERSION}
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    devices:
+      - /dev/kmsg
+    ports:
+      - "9180:8080"
+
+  service-configuration:
+    build:
+      context: ./config
+    volumes:
+      - service-config:/config
+
+  redis:
+    image: redis:3.2.12
+    depends_on:
+      consul:
+        condition: service_healthy
+
+volumes:
+  syslog:
+    external: false
+  nginx-log:
+    external: false
+  auth-tomcat-log:
+    external: false
+  consul-template-log:
+    external: false
+  service-config:
+    external: false

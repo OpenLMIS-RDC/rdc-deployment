@@ -1,0 +1,43 @@
+# Copy real values to rdc-configuration/dev_env/terraform.tfvars (private repo)
+# and run: terraform plan -var-file=<path-to-that-file>
+# Never commit real credentials to this repository.
+
+region      = "eu-west-1"
+vpc_id      = "vpc-xxxxxxxxxxxxxxxxx"
+subnet_id   = "subnet-xxxxxxxxxxxxxxxxx"
+admin_cidrs = ["203.0.113.0/24"]
+db_username = "CHANGE_ME"
+db_password = "CHANGE_ME"
+
+# Database placement. Either create a subnet group from subnets in the app VPC:
+# db_subnet_ids = ["subnet-xxxxxxxxxxxxxxxxx", "subnet-yyyyyyyyyyyyyyyyy"]
+# ...or reuse an existing subnet group, optionally in another VPC with a
+# public endpoint (enable force_ssl in the parameter group when public):
+# db_vpc_id              = "vpc-yyyyyyyyyyyyyyyyy"
+# db_subnet_group_name   = "default-vpc-yyyyyyyyyyyyyyyyy"
+# db_publicly_accessible = true
+
+# Sizing (defaults shown)
+instance_type     = "r5.xlarge"
+db_instance_class = "db.t3.medium"
+
+# Set false to skip RDS and run the database in a container instead;
+# db_subnet_ids / db_username / db_password can then be omitted.
+create_db = true
+
+# Restore the database from a snapshot instead of creating it empty.
+# Master user and data come from the snapshot; password is reset to db_password.
+# db_snapshot_identifier = "my-manual-snapshot"
+# db_allocated_storage   = 110   # >= snapshot size
+
+# Use an existing DB parameter group instead of creating the CDC-tuned one.
+# Note: the reporting stack needs rds.logical_replication=1 and OpenLMIS
+# services need password_encryption=md5 - make sure the group has both.
+# db_parameter_group_name = "my-existing-group"
+
+# SSH access - set exactly one:
+# a) existing EC2 key pair
+ssh_key_name = "CHANGE_ME"
+# b) or create a new key pair from a locally generated key
+#    (ssh-keygen -t ed25519 -f <key-file>, then paste <key-file>.pub)
+# ssh_public_key = "ssh-ed25519 AAAA... user@host"
