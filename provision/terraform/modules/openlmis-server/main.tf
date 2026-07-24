@@ -83,6 +83,17 @@ resource "aws_security_group" "app" {
     }
   }
 
+  dynamic "ingress" {
+    for_each = var.extra_sg_ingress
+    content {
+      description     = ingress.value.description
+      from_port       = ingress.value.port
+      to_port         = ingress.value.port
+      protocol        = "tcp"
+      security_groups = [ingress.value.source_security_group_id]
+    }
+  }
+
   egress {
     from_port   = 0
     to_port     = 0

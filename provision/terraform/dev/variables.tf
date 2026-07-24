@@ -3,6 +3,32 @@ variable "region" {
   default = "eu-west-1"
 }
 
+variable "name" {
+  description = "Environment name, prefixes all resources"
+  type        = string
+}
+
+variable "certificate_domain" {
+  description = "Domain of the issued ACM certificate used for TLS termination"
+  type        = string
+}
+
+variable "vpc_secondary_cidr" {
+  description = "Secondary VPC CIDR for the ALB's second-AZ subnet"
+  type        = string
+}
+
+variable "lb_subnet_cidr" {
+  description = "CIDR of the created second-AZ subnet"
+  type        = string
+}
+
+variable "superset_enabled" {
+  description = "Expose Superset through the load balancers (8443)"
+  type        = bool
+  default     = false
+}
+
 variable "vpc_id" {
   description = "ID of the existing VPC to deploy the application host into"
   type        = string

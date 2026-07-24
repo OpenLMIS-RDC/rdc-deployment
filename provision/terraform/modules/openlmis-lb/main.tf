@@ -2,26 +2,30 @@
 # DNS (A record) -> NLB holding the environment's public EIP. The NLB passes
 # 22/2376 straight to the instance and forwards 80/443 to an internal ALB,
 # which terminates TLS with an ACM certificate and redirects HTTP to HTTPS.
-# The ALB needs two AZs; the VPC only has subnets in one, so a secondary
-# CIDR and a second-AZ subnet are added. The instance has its own EIP for
-# outbound traffic (also used by the DB security group rule).
+# The ALB needs two AZs; when the VPC has subnets in only one, set
+# vpc_secondary_cidr/lb_subnet_cidr/lb_subnet_az to create the second leg,
+# otherwise pass an existing subnet via alb_second_subnet_id.
 
-# AWS restricts secondary CIDRs from 10.0.0.0/15 when the primary is in that
-# range, hence 10.2.x rather than 10.0.1.x.
+locals {
+  create_subnet  = var.alb_second_subnet_id == ""
+  alb_second_leg = local.create_subnet ? aws_subnet.lb[0].id : var.alb_second_subnet_id
+}
+
 resource "aws_vpc_ipv4_cidr_block_association" "lb" {
+  count = local.create_subnet ? 1 : 0
+
   vpc_id     = var.vpc_id
-  cidr_block = "10.2.0.0/24"
+  cidr_block = var.vpc_secondary_cidr
 }
 
 resource "aws_subnet" "lb" {
-  vpc_id            = var.vpc_id
-  cidr_block        = "10.2.0.0/25"
-  availability_zone = "${var.region}b"
+  count = local.create_subnet ? 1 : 0
 
-  tags = {
-    Name      = "elmis-dev-lb"
-    ManagedBy = "terraform"
-  }
+  vpc_id            = var.vpc_id
+  cidr_block        = var.lb_subnet_cidr
+  availability_zone = var.lb_subnet_az
+
+  tags = merge(var.tags, { Name = "${var.name}-lb" })
 
   depends_on = [aws_vpc_ipv4_cidr_block_association.lb]
 }
@@ -30,16 +34,13 @@ resource "aws_subnet" "lb" {
 resource "aws_eip" "nlb" {
   domain = "vpc"
 
-  tags = {
-    Name      = "elmis-dev-nlb"
-    ManagedBy = "terraform"
-  }
+  tags = merge(var.tags, { Name = "${var.name}-nlb" })
 }
 
 # --- NLB: stable entry point on the public EIP ---
 
 resource "aws_lb" "nlb" {
-  name               = "elmis-dev-nlb"
+  name               = "${var.name}-nlb"
   load_balancer_type = "network"
 
   subnet_mapping {
@@ -47,15 +48,11 @@ resource "aws_lb" "nlb" {
     allocation_id = aws_eip.nlb.id
   }
 
-  tags = {
-    Environment = "dev"
-    Project     = "eLMIS-RDC"
-    ManagedBy   = "terraform"
-  }
+  tags = var.tags
 }
 
 resource "aws_lb_target_group" "ssh" {
-  name        = "elmis-dev-ssh"
+  name        = "${var.name}-ssh"
   port        = 22
   protocol    = "TCP"
   vpc_id      = var.vpc_id
@@ -63,7 +60,7 @@ resource "aws_lb_target_group" "ssh" {
 }
 
 resource "aws_lb_target_group" "docker_tls" {
-  name        = "elmis-dev-docker-tls"
+  name        = "${var.name}-docker-tls"
   port        = 2376
   protocol    = "TCP"
   vpc_id      = var.vpc_id
@@ -71,7 +68,7 @@ resource "aws_lb_target_group" "docker_tls" {
 }
 
 resource "aws_lb_target_group" "alb_http" {
-  name        = "elmis-dev-alb-http"
+  name        = "${var.name}-alb-http"
   port        = 80
   protocol    = "TCP"
   vpc_id      = var.vpc_id
@@ -79,7 +76,7 @@ resource "aws_lb_target_group" "alb_http" {
 }
 
 resource "aws_lb_target_group" "alb_https" {
-  name        = "elmis-dev-alb-https"
+  name        = "${var.name}-alb-https"
   port        = 443
   protocol    = "TCP"
   vpc_id      = var.vpc_id
@@ -93,8 +90,10 @@ resource "aws_lb_target_group" "alb_https" {
 }
 
 resource "aws_lb_target_group" "alb_superset" {
-  name        = "elmis-dev-alb-superset"
-  port        = 8443
+  count = var.superset_enabled ? 1 : 0
+
+  name        = "${var.name}-alb-superset"
+  port        = var.superset_listener_port
   protocol    = "TCP"
   vpc_id      = var.vpc_id
   target_type = "alb"
@@ -107,13 +106,13 @@ resource "aws_lb_target_group" "alb_superset" {
 
 resource "aws_lb_target_group_attachment" "ssh" {
   target_group_arn = aws_lb_target_group.ssh.arn
-  target_id        = module.dev.instance_id
+  target_id        = var.instance_id
   port             = 22
 }
 
 resource "aws_lb_target_group_attachment" "docker_tls" {
   target_group_arn = aws_lb_target_group.docker_tls.arn
-  target_id        = module.dev.instance_id
+  target_id        = var.instance_id
   port             = 2376
 }
 
@@ -134,9 +133,11 @@ resource "aws_lb_target_group_attachment" "alb_https" {
 }
 
 resource "aws_lb_target_group_attachment" "alb_superset" {
-  target_group_arn = aws_lb_target_group.alb_superset.arn
+  count = var.superset_enabled ? 1 : 0
+
+  target_group_arn = aws_lb_target_group.alb_superset[0].arn
   target_id        = aws_lb.app.arn
-  port             = 8443
+  port             = var.superset_listener_port
 
   depends_on = [aws_lb_listener.superset]
 }
@@ -186,21 +187,23 @@ resource "aws_lb_listener" "nlb_https" {
 }
 
 resource "aws_lb_listener" "nlb_superset" {
+  count = var.superset_enabled ? 1 : 0
+
   load_balancer_arn = aws_lb.nlb.arn
-  port              = 8443
+  port              = var.superset_listener_port
   protocol          = "TCP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.alb_superset.arn
+    target_group_arn = aws_lb_target_group.alb_superset[0].arn
   }
 }
 
 # --- ALB: TLS termination and HTTP->HTTPS redirect ---
 
 resource "aws_security_group" "alb" {
-  name        = "elmis-dev-alb"
-  description = "HTTP/HTTPS to the dev ALB (client IPs preserved by the NLB)"
+  name        = "${var.name}-alb"
+  description = var.alb_sg_description
   vpc_id      = var.vpc_id
 
   ingress {
@@ -208,7 +211,7 @@ resource "aws_security_group" "alb" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.public_cidrs
   }
 
   ingress {
@@ -216,15 +219,18 @@ resource "aws_security_group" "alb" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.public_cidrs
   }
 
-  ingress {
-    description = "Superset HTTPS"
-    from_port   = 8443
-    to_port     = 8443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+  dynamic "ingress" {
+    for_each = var.superset_enabled ? [1] : []
+    content {
+      description = "Superset HTTPS"
+      from_port   = var.superset_listener_port
+      to_port     = var.superset_listener_port
+      protocol    = "tcp"
+      cidr_blocks = var.public_cidrs
+    }
   }
 
   egress {
@@ -234,34 +240,27 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name      = "elmis-dev-alb"
-    ManagedBy = "terraform"
-  }
+  tags = merge(var.tags, { Name = "${var.name}-alb" })
 }
 
-data "aws_acm_certificate" "wildcard" {
-  domain      = "logimev.cd"
+data "aws_acm_certificate" "this" {
+  domain      = var.certificate_domain
   statuses    = ["ISSUED"]
   most_recent = true
 }
 
 resource "aws_lb" "app" {
-  name               = "elmis-dev-alb"
+  name               = "${var.name}-alb"
   load_balancer_type = "application"
   internal           = true
   security_groups    = [aws_security_group.alb.id]
-  subnets            = [var.subnet_id, aws_subnet.lb.id]
+  subnets            = [var.subnet_id, local.alb_second_leg]
 
-  tags = {
-    Environment = "dev"
-    Project     = "eLMIS-RDC"
-    ManagedBy   = "terraform"
-  }
+  tags = var.tags
 }
 
 resource "aws_lb_target_group" "app" {
-  name     = "elmis-dev-http"
+  name     = "${var.name}-http"
   port     = 80
   protocol = "HTTP"
   vpc_id   = var.vpc_id
@@ -275,7 +274,7 @@ resource "aws_lb_target_group" "app" {
 
 resource "aws_lb_target_group_attachment" "app" {
   target_group_arn = aws_lb_target_group.app.arn
-  target_id        = module.dev.instance_id
+  target_id        = var.instance_id
   port             = 80
 }
 
@@ -284,7 +283,7 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = data.aws_acm_certificate.wildcard.arn
+  certificate_arn   = data.aws_acm_certificate.this.arn
 
   default_action {
     type             = "forward"
@@ -308,11 +307,13 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# --- Superset: TLS on 8443, forwarded to the container's plain-HTTP port ---
+# --- Superset: TLS on superset_listener_port, forwarded to the container ---
 
 resource "aws_lb_target_group" "superset" {
-  name     = "elmis-dev-superset"
-  port     = 8088
+  count = var.superset_enabled ? 1 : 0
+
+  name     = "${var.name}-superset"
+  port     = var.superset_target_port
   protocol = "HTTP"
   vpc_id   = var.vpc_id
 
@@ -323,31 +324,25 @@ resource "aws_lb_target_group" "superset" {
 }
 
 resource "aws_lb_target_group_attachment" "superset" {
-  target_group_arn = aws_lb_target_group.superset.arn
-  target_id        = module.dev.instance_id
-  port             = 8088
+  count = var.superset_enabled ? 1 : 0
+
+  target_group_arn = aws_lb_target_group.superset[0].arn
+  target_id        = var.instance_id
+  port             = var.superset_target_port
 }
 
 resource "aws_lb_listener" "superset" {
+  count = var.superset_enabled ? 1 : 0
+
   load_balancer_arn = aws_lb.app.arn
-  port              = 8443
+  port              = var.superset_listener_port
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = data.aws_acm_certificate.wildcard.arn
+  certificate_arn   = data.aws_acm_certificate.this.arn
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.superset.arn
+    target_group_arn = aws_lb_target_group.superset[0].arn
   }
 }
 
-# Superset's plain-HTTP port is reachable only from the ALB.
-resource "aws_security_group_rule" "superset_from_alb" {
-  type                     = "ingress"
-  description              = "Superset from the ALB"
-  from_port                = 8088
-  to_port                  = 8088
-  protocol                 = "tcp"
-  security_group_id        = module.dev.app_security_group_id
-  source_security_group_id = aws_security_group.alb.id
-}

@@ -72,6 +72,16 @@ variable "monitoring_cidrs" {
   default     = []
 }
 
+variable "extra_sg_ingress" {
+  description = "Additional app security group ingress rules sourced from other security groups (e.g. Superset from an ALB)"
+  type = list(object({
+    port                     = number
+    source_security_group_id = string
+    description              = string
+  }))
+  default = []
+}
+
 variable "monitoring_ports" {
   description = "Metrics ports opened to monitoring_cidrs: node-exporter (9100), cadvisor (9180)"
   type        = list(number)

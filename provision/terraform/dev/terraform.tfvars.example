@@ -2,12 +2,22 @@
 # and run: terraform plan -var-file=<path-to-that-file>
 # Never commit real credentials to this repository.
 
-region      = "eu-west-1"
-vpc_id      = "vpc-xxxxxxxxxxxxxxxxx"
-subnet_id   = "subnet-xxxxxxxxxxxxxxxxx"
-admin_cidrs = ["203.0.113.0/24"]
-db_username = "CHANGE_ME"
-db_password = "CHANGE_ME"
+name               = "CHANGE_ME"
+region             = "eu-west-1"
+vpc_id             = "vpc-xxxxxxxxxxxxxxxxx"
+subnet_id          = "subnet-xxxxxxxxxxxxxxxxx"
+certificate_domain = "example.org"
+admin_cidrs        = ["203.0.113.0/24"]
+db_username        = "CHANGE_ME"
+db_password        = "CHANGE_ME"
+
+# ALB second-AZ subnet, created from a secondary VPC CIDR (only needed when
+# the VPC has all subnets in one AZ)
+vpc_secondary_cidr = "10.2.0.0/24"
+lb_subnet_cidr     = "10.2.0.0/25"
+
+# Superset exposure through the load balancers (8443)
+superset_enabled = false
 
 # Database placement. Either create a subnet group from subnets in the app VPC:
 # db_subnet_ids = ["subnet-xxxxxxxxxxxxxxxxx", "subnet-yyyyyyyyyyyyyyyyy"]
