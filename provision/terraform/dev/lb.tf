@@ -92,6 +92,19 @@ resource "aws_lb_target_group" "alb_https" {
   }
 }
 
+resource "aws_lb_target_group" "alb_superset" {
+  name        = "elmis-dev-alb-superset"
+  port        = 8443
+  protocol    = "TCP"
+  vpc_id      = var.vpc_id
+  target_type = "alb"
+
+  health_check {
+    protocol = "HTTPS"
+    path     = "/health"
+  }
+}
+
 resource "aws_lb_target_group_attachment" "ssh" {
   target_group_arn = aws_lb_target_group.ssh.arn
   target_id        = module.dev.instance_id
@@ -118,6 +131,14 @@ resource "aws_lb_target_group_attachment" "alb_https" {
   port             = 443
 
   depends_on = [aws_lb_listener.https]
+}
+
+resource "aws_lb_target_group_attachment" "alb_superset" {
+  target_group_arn = aws_lb_target_group.alb_superset.arn
+  target_id        = aws_lb.app.arn
+  port             = 8443
+
+  depends_on = [aws_lb_listener.superset]
 }
 
 resource "aws_lb_listener" "nlb_ssh" {
@@ -164,6 +185,17 @@ resource "aws_lb_listener" "nlb_https" {
   }
 }
 
+resource "aws_lb_listener" "nlb_superset" {
+  load_balancer_arn = aws_lb.nlb.arn
+  port              = 8443
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.alb_superset.arn
+  }
+}
+
 # --- ALB: TLS termination and HTTP->HTTPS redirect ---
 
 resource "aws_security_group" "alb" {
@@ -183,6 +215,14 @@ resource "aws_security_group" "alb" {
     description = "HTTPS"
     from_port   = 443
     to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Superset HTTPS"
+    from_port   = 8443
+    to_port     = 8443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -266,4 +306,48 @@ resource "aws_lb_listener" "http" {
       status_code = "HTTP_301"
     }
   }
+}
+
+# --- Superset: TLS on 8443, forwarded to the container's plain-HTTP port ---
+
+resource "aws_lb_target_group" "superset" {
+  name     = "elmis-dev-superset"
+  port     = 8088
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+
+  health_check {
+    path    = "/health"
+    matcher = "200-399"
+  }
+}
+
+resource "aws_lb_target_group_attachment" "superset" {
+  target_group_arn = aws_lb_target_group.superset.arn
+  target_id        = module.dev.instance_id
+  port             = 8088
+}
+
+resource "aws_lb_listener" "superset" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = 8443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = data.aws_acm_certificate.wildcard.arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.superset.arn
+  }
+}
+
+# Superset's plain-HTTP port is reachable only from the ALB.
+resource "aws_security_group_rule" "superset_from_alb" {
+  type                     = "ingress"
+  description              = "Superset from the ALB"
+  from_port                = 8088
+  to_port                  = 8088
+  protocol                 = "tcp"
+  security_group_id        = module.dev.app_security_group_id
+  source_security_group_id = aws_security_group.alb.id
 }

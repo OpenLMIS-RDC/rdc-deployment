@@ -97,9 +97,9 @@ variable "admin_cidrs" {
 }
 
 variable "reporting_ports" {
-  description = "Reporting stack ports opened publicly like 80/443: Superset HTTP (8088) and HTTPS (8443)"
+  description = "Extra publicly opened ports; Superset is served through the NLB/ALB (8443), so none are needed by default"
   type        = list(number)
-  default     = [8088, 8443]
+  default     = []
 }
 
 variable "monitoring_cidrs" {
