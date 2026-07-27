@@ -384,3 +384,365 @@ SELECT
 FROM current_lot_balance sb
 JOIN kafka_lots l ON sb.lot_id = l.id
 WHERE (l.expirationdate - CURRENT_DATE) <= 270;
+
+-- View: public.vw_stock_adjustments
+
+-- DROP VIEW public.vw_stock_adjustments;
+
+CREATE OR REPLACE VIEW public.vw_stock_adjustments
+ AS
+ SELECT li.id AS line_item_id,
+    df.facility_name AS structure,
+    dp.product_code AS code_produit,
+    dp.product_name AS nom_produit,
+    kl.lotcode AS numero_lot,
+    dp.product_description AS unite_de_dispensation,
+        CASE
+            WHEN r.reasontype = 'CREDIT'::text THEN li.quantity
+            ELSE - li.quantity
+        END AS quantite_ajustee,
+    r.name AS raison_ajustement,
+    TRIM(BOTH FROM (COALESCE(du.first_name, ''::text) || ' '::text) || COALESCE(du.last_name, ''::text)) AS utilisateur_ayant_ajuste,
+    du.username AS login_utilisateur,
+        CASE
+            WHEN r.reasontype = 'CREDIT'::text THEN 'Positif'::text
+            ELSE 'Négatif'::text
+        END AS sens_ajustement,
+    r.reasontype,
+    li.quantity AS quantite_absolue,
+    li.occurreddate AS date_ajustement,
+    dpr.program_name AS programme,
+    df.geographic_level AS niveau_organisationnel,
+    df.geographic_zone_name AS zone_geographique,
+    df.district_name AS district,
+    df.region_name AS region,
+    df.facility_type_name AS type_de_structure,
+    EXTRACT(year FROM li.occurreddate)::integer AS annee,
+    EXTRACT(month FROM li.occurreddate)::integer AS mois,
+    to_char(li.occurreddate::timestamp with time zone, 'YYYY-MM'::text) AS annee_mois
+   FROM kafka_stock_card_line_items li
+     JOIN kafka_stock_card_line_item_reasons r ON r.id = li.reasonid
+     JOIN kafka_stock_cards sc ON sc.id = li.stockcardid
+     LEFT JOIN analytics.dim_product dp ON dp.orderable_id = sc.orderableid
+     LEFT JOIN kafka_lots kl ON kl.id = sc.lotid
+     LEFT JOIN analytics.dim_facility df ON df.facility_id = sc.facilityid
+     LEFT JOIN analytics.dim_program dpr ON dpr.program_id = sc.programid
+     LEFT JOIN analytics.dim_user du ON du.user_id = li.userid
+  WHERE r.reasoncategory = 'ADJUSTMENT'::text AND (r.name <> ALL (ARRAY['Consommation'::text, 'Consumed'::text, 'Receipts'::text, 'Beginning Balance Excess'::text, 'Beginning Balance Insufficiency'::text]));
+
+ALTER TABLE public.vw_stock_adjustments
+    OWNER TO postgres;
+
+
+
+-- View: public.vw_expiry_risk
+
+-- DROP VIEW public.vw_expiry_risk;
+
+CREATE OR REPLACE VIEW public.vw_expiry_risk
+ AS
+ WITH price AS (
+         SELECT DISTINCT ON (po.orderableid) po.orderableid,
+            po.priceperpack
+           FROM kafka_program_orderables po
+          ORDER BY po.orderableid, po.active DESC, po.orderableversionnumber DESC
+        ), packsize AS (
+         SELECT DISTINCT ON (o.id) o.id AS orderableid,
+            o.netcontent
+           FROM kafka_orderables o
+          ORDER BY o.id, o.versionnumber DESC
+        )
+ SELECT fe.facility_id,
+    fe.product_id,
+    fe.lot_id,
+    df.facility_name AS structure,
+    dp.product_code AS code_produit,
+    dp.product_name AS nom_produit,
+    fe.lot_code AS numero_lot,
+    fe.expiration_date AS date_expiration,
+    dp.product_description AS unite_du_produit,
+    fe.stock_on_hand,
+    fe.lifetime_days AS jours_avant_expiration,
+    fe.expiration_category AS categorie_expiration,
+        CASE
+            WHEN fe.lifetime_days < 0 THEN fe.stock_on_hand
+            ELSE 0::bigint
+        END AS qte_deja_expiree,
+        CASE
+            WHEN fe.lifetime_days >= 0 AND fe.lifetime_days <= 30 THEN fe.stock_on_hand
+            ELSE 0::bigint
+        END AS qte_expirant_30j,
+        CASE
+            WHEN fe.lifetime_days >= 0 AND fe.lifetime_days <= 60 THEN fe.stock_on_hand
+            ELSE 0::bigint
+        END AS qte_expirant_60j,
+        CASE
+            WHEN fe.lifetime_days >= 0 AND fe.lifetime_days <= 90 THEN fe.stock_on_hand
+            ELSE 0::bigint
+        END AS qte_expirant_90j,
+    round(
+        CASE
+            WHEN fe.lifetime_days >= 0 AND fe.lifetime_days <= 30 THEN fe.stock_on_hand
+            ELSE 0::bigint
+        END::numeric * pr.priceperpack / NULLIF(ps.netcontent, 0)::numeric, 2) AS valeur_usd_30j,
+    pr.priceperpack,
+    ps.netcontent,
+    dpr.program_name AS programme,
+    df.geographic_level AS niveau_organisationnel,
+    df.geographic_zone_name AS zone_geographique,
+    df.district_name AS district,
+    df.region_name AS region,
+    df.facility_type_name AS type_de_structure,
+    EXTRACT(year FROM fe.expiration_date)::integer AS annee_expiration,
+    EXTRACT(month FROM fe.expiration_date)::integer AS mois_expiration
+   FROM analytics.fact_expired_risk_snapshot fe
+     LEFT JOIN analytics.dim_product dp ON dp.orderable_id = fe.product_id
+     LEFT JOIN analytics.dim_facility df ON df.facility_id = fe.facility_id
+     LEFT JOIN analytics.dim_program dpr ON dpr.program_id = fe.program_id
+     LEFT JOIN price pr ON pr.orderableid = fe.product_id
+     LEFT JOIN packsize ps ON ps.orderableid = fe.product_id
+  WHERE fe.lifetime_days <= 90;
+
+ALTER TABLE public.vw_expiry_risk
+    OWNER TO postgres;
+
+
+
+-- View: public.vw_order_flow_product
+
+-- DROP VIEW public.vw_order_flow_product;
+
+CREATE OR REPLACE VIEW public.vw_order_flow_product
+ AS
+ WITH rli AS (
+         SELECT kafka_requisition_line_items.requisitionid,
+            kafka_requisition_line_items.orderableid,
+            sum(kafka_requisition_line_items.requestedquantity) AS qte_demandee,
+            sum(kafka_requisition_line_items.approvedquantity) AS qte_approuvee
+           FROM kafka_requisition_line_items
+          GROUP BY kafka_requisition_line_items.requisitionid, kafka_requisition_line_items.orderableid
+        ), pod_prod AS (
+         SELECT s.orderid,
+            pol.orderableid,
+            sum(pol.quantityaccepted) AS qte_acceptee,
+            sum(pol.quantityrejected) AS qte_rejetee,
+            count(DISTINCT pol.lotid) AS nb_lots
+           FROM kafka_proof_of_delivery_line_items pol
+             JOIN kafka_proofs_of_delivery pod ON pod.id = pol.proofofdeliveryid
+             JOIN kafka_shipments s ON s.id = pod.shipmentid
+          GROUP BY s.orderid, pol.orderableid
+        ), ord AS (
+         SELECT o.id AS order_id,
+            o.externalid AS ext,
+            o.ordercode,
+            o.status AS order_status,
+            o.facilityid,
+            o.programid,
+            o.processingperiodid,
+            o.emergency,
+            min(o.createddate::timestamp with time zone) AS date_commande,
+            min(s.shippeddate::timestamp with time zone) AS date_expedition,
+            max(pod.receiveddate) AS date_reception
+           FROM kafka_orders o
+             LEFT JOIN kafka_shipments s ON s.orderid = o.id
+             LEFT JOIN kafka_proofs_of_delivery pod ON pod.shipmentid = s.id
+          GROUP BY o.id, o.externalid, o.ordercode, o.status, o.facilityid, o.programid, o.processingperiodid, o.emergency
+        )
+ SELECT ord.ext::uuid AS requisition_id,
+    ord.order_id,
+    ord.ordercode AS numero_commande,
+    dpp.processing_period_name AS periode,
+    ord.order_status,
+        CASE ord.order_status
+            WHEN 'ORDERED'::text THEN 'Commandée'::text
+            WHEN 'FULFILLING'::text THEN 'En préparation'::text
+            WHEN 'SHIPPED'::text THEN 'Expédiée'::text
+            WHEN 'RECEIVED'::text THEN 'Reçue'::text
+            WHEN 'TRANSFER_FAILED'::text THEN 'Échec de transfert'::text
+            ELSE ord.order_status
+        END AS statut_commande,
+    oli.orderableid::uuid AS orderable_id,
+    dp.product_code AS code_produit,
+    dp.product_name AS nom_produit,
+    dp.product_description AS unite_du_produit,
+    rli.qte_demandee,
+    rli.qte_approuvee,
+    oli.orderedquantity AS qte_commandee,
+    COALESCE(pp.qte_acceptee, 0::bigint) + COALESCE(pp.qte_rejetee, 0::bigint) AS qte_livree,
+    pp.qte_acceptee,
+    pp.qte_rejetee,
+    pp.nb_lots,
+        CASE
+            WHEN oli.orderedquantity > 0 THEN LEAST(round(100.0 * (COALESCE(pp.qte_acceptee, 0::bigint) + COALESCE(pp.qte_rejetee, 0::bigint))::numeric / oli.orderedquantity::numeric, 1), 100.0)
+            ELSE NULL::numeric
+        END AS taux_satisfaction_pct,
+        CASE
+            WHEN oli.orderedquantity > 0 THEN LEAST(round(100.0 * COALESCE(pp.qte_acceptee, 0::bigint)::numeric / oli.orderedquantity::numeric, 1), 100.0)
+            ELSE NULL::numeric
+        END AS taux_reception_pct,
+        CASE
+            WHEN (COALESCE(pp.qte_acceptee, 0::bigint) + COALESCE(pp.qte_rejetee, 0::bigint)) > 0 THEN round(100.0 * COALESCE(pp.qte_rejetee, 0::bigint)::numeric / (COALESCE(pp.qte_acceptee, 0::bigint) + COALESCE(pp.qte_rejetee, 0::bigint))::numeric, 1)
+            ELSE NULL::numeric
+        END AS taux_rejet_pct,
+    COALESCE(pp.qte_acceptee, 0::bigint) > oli.orderedquantity AS incoherence_qte,
+    ord.date_commande,
+    ord.date_expedition,
+    ord.date_reception,
+    df.geographic_level AS niveau_organisationnel,
+    df.geographic_zone_name AS zone_geographique,
+    df.facility_type_name AS type_de_structure,
+    df.facility_name AS structure,
+    dpr.program_name AS programme,
+    dpp.period_year AS annee,
+    dpp.period_month AS mois,
+    ord.emergency AS urgence
+   FROM kafka_order_line_items oli
+     JOIN ord ON ord.order_id = oli.orderid
+     LEFT JOIN rli ON rli.requisitionid = ord.ext::uuid AND rli.orderableid = oli.orderableid::uuid
+     LEFT JOIN pod_prod pp ON pp.orderid = oli.orderid AND pp.orderableid = oli.orderableid
+     LEFT JOIN analytics.dim_product dp ON dp.orderable_id = oli.orderableid::uuid
+     LEFT JOIN analytics.dim_facility df ON df.facility_id = ord.facilityid::uuid
+     LEFT JOIN analytics.dim_program dpr ON dpr.program_id = ord.programid::uuid
+     LEFT JOIN analytics.dim_processing_period dpp ON dpp.processing_period_id = ord.processingperiodid::uuid;
+
+ALTER TABLE public.vw_order_flow_product
+    OWNER TO postgres;
+
+
+
+-- View: public.vw_requisition_order_flow
+
+-- DROP VIEW public.vw_requisition_order_flow;
+
+CREATE OR REPLACE VIEW public.vw_requisition_order_flow
+ AS
+ WITH req_dates AS (
+         SELECT kafka_status_changes.requisitionid,
+            min(kafka_status_changes.createddate::timestamp with time zone) FILTER (WHERE kafka_status_changes.status::text = 'INITIATED'::text) AS date_initiated,
+            min(kafka_status_changes.createddate::timestamp with time zone) FILTER (WHERE kafka_status_changes.status::text = 'RELEASED'::text) AS date_released
+           FROM kafka_status_changes
+          GROUP BY kafka_status_changes.requisitionid
+        ), req_qty AS (
+         SELECT kafka_requisition_line_items.requisitionid,
+            sum(kafka_requisition_line_items.requestedquantity) AS qte_demandee,
+            sum(kafka_requisition_line_items.approvedquantity) AS qte_approuvee
+           FROM kafka_requisition_line_items
+          GROUP BY kafka_requisition_line_items.requisitionid
+        ), ord_qty AS (
+         SELECT kafka_order_line_items.orderid,
+            sum(kafka_order_line_items.orderedquantity) AS qte_commandee
+           FROM kafka_order_line_items
+          GROUP BY kafka_order_line_items.orderid
+        ), pod_qty AS (
+         SELECT s.orderid,
+            sum(pol.quantityaccepted) AS qte_acceptee,
+            sum(pol.quantityrejected) AS qte_rejetee
+           FROM kafka_proof_of_delivery_line_items pol
+             JOIN kafka_proofs_of_delivery pod ON pod.id = pol.proofofdeliveryid
+             JOIN kafka_shipments s ON s.id = pod.shipmentid
+          GROUP BY s.orderid
+        ), prod_units AS (
+         SELECT oli.orderid,
+            string_agg(DISTINCT dp.product_description::text, ', '::text ORDER BY (dp.product_description::text)) AS unites_produits,
+            count(DISTINCT oli.orderableid) AS nb_articles
+           FROM kafka_order_line_items oli
+             JOIN analytics.dim_product dp ON dp.orderable_id = oli.orderableid::uuid
+          GROUP BY oli.orderid
+        ), order_info AS (
+         SELECT o.id AS order_id,
+            o.externalid AS ext,
+            o.ordercode,
+            o.status AS order_status,
+            min(o.createddate::timestamp with time zone) AS date_commande,
+            min(s.shippeddate::timestamp with time zone) AS date_expedition,
+            max(pod.receiveddate) AS date_reception
+           FROM kafka_orders o
+             LEFT JOIN kafka_shipments s ON s.orderid = o.id
+             LEFT JOIN kafka_proofs_of_delivery pod ON pod.shipmentid = s.id
+          GROUP BY o.id, o.externalid, o.ordercode, o.status
+        )
+ SELECT r.id AS requisition_id,
+    oi.order_id,
+    oi.ordercode AS numero_commande,
+    dpp.processing_period_name AS periode,
+    pu.unites_produits,
+    pu.nb_articles,
+        CASE r.status
+            WHEN 'INITIATED'::text THEN 'Initiée'::character varying
+            WHEN 'SUBMITTED'::text THEN 'Soumise'::character varying
+            WHEN 'AUTHORIZED'::text THEN 'Autorisée'::character varying
+            WHEN 'IN_APPROVAL'::text THEN 'En cours d''approbation'::character varying
+            WHEN 'APPROVED'::text THEN 'Approuvée'::character varying
+            WHEN 'RELEASED'::text THEN 'Libérée (convertie en commande)'::character varying
+            WHEN 'RELEASED_WITHOUT_ORDER'::text THEN 'Libérée sans commande'::character varying
+            WHEN 'REJECTED'::text THEN 'Rejetée'::character varying
+            WHEN 'SKIPPED'::text THEN 'Ignorée'::character varying
+            ELSE r.status
+        END AS statut_requisition,
+    oi.order_status,
+        CASE oi.order_status
+            WHEN 'ORDERED'::text THEN 'Commandée'::text
+            WHEN 'FULFILLING'::text THEN 'En préparation'::text
+            WHEN 'SHIPPED'::text THEN 'Expédiée'::text
+            WHEN 'RECEIVED'::text THEN 'Reçue'::text
+            WHEN 'TRANSFER_FAILED'::text THEN 'Échec de transfert'::text
+            ELSE oi.order_status
+        END AS statut_commande,
+        CASE
+            WHEN oi.date_reception IS NOT NULL OR oi.order_status = 'RECEIVED'::text THEN '6. Reçue'::text
+            WHEN oi.order_status = 'SHIPPED'::text THEN '5. Expédiée'::text
+            WHEN oi.order_status = 'FULFILLING'::text THEN '4. En préparation'::text
+            WHEN oi.order_status = 'ORDERED'::text THEN '3. Commandée'::text
+            WHEN oi.order_status = 'TRANSFER_FAILED'::text THEN 'X. Échec de transfert'::text
+            WHEN r.status::text = 'RELEASED'::text THEN '2. Libérée'::text
+            ELSE '1. En cours (réquisition)'::text
+        END AS etape_flux,
+    rq.qte_demandee,
+    rq.qte_approuvee,
+    oq.qte_commandee,
+    COALESCE(pq.qte_acceptee, 0::bigint) + COALESCE(pq.qte_rejetee, 0::bigint) AS qte_livree,
+    pq.qte_acceptee,
+    pq.qte_rejetee,
+        CASE
+            WHEN oq.qte_commandee > 0::numeric THEN LEAST(round(100.0 * (COALESCE(pq.qte_acceptee, 0::bigint) + COALESCE(pq.qte_rejetee, 0::bigint))::numeric / oq.qte_commandee, 1), 100.0)
+            ELSE NULL::numeric
+        END AS taux_satisfaction_pct,
+        CASE
+            WHEN oq.qte_commandee > 0::numeric THEN LEAST(round(100.0 * COALESCE(pq.qte_acceptee, 0::bigint)::numeric / oq.qte_commandee, 1), 100.0)
+            ELSE NULL::numeric
+        END AS taux_reception_pct,
+        CASE
+            WHEN (COALESCE(pq.qte_acceptee, 0::bigint) + COALESCE(pq.qte_rejetee, 0::bigint)) > 0 THEN round(100.0 * COALESCE(pq.qte_rejetee, 0::bigint)::numeric / (COALESCE(pq.qte_acceptee, 0::bigint) + COALESCE(pq.qte_rejetee, 0::bigint))::numeric, 1)
+            ELSE NULL::numeric
+        END AS taux_rejet_pct,
+    COALESCE(pq.qte_acceptee, 0::bigint)::numeric > oq.qte_commandee AS incoherence_qte,
+    rd.date_initiated,
+    rd.date_released,
+    oi.date_commande,
+    oi.date_expedition,
+    oi.date_reception,
+    GREATEST(oi.date_reception - rd.date_initiated::date, 0) AS delai_total_demande_a_reception_j,
+    GREATEST(oi.date_reception - oi.date_commande::date, 0) AS delai_commande_a_reception_j,
+    df.geographic_level AS niveau_organisationnel,
+    df.geographic_zone_name AS zone_geographique,
+    df.facility_type_name AS type_de_structure,
+    df.facility_name AS structure,
+    dpr.program_name AS programme,
+    dpp.period_year AS annee,
+    dpp.period_month AS mois,
+    r.emergency AS urgence
+   FROM kafka_requisitions r
+     LEFT JOIN req_dates rd ON rd.requisitionid = r.id
+     LEFT JOIN req_qty rq ON rq.requisitionid = r.id
+     LEFT JOIN order_info oi ON oi.ext = r.id
+     LEFT JOIN ord_qty oq ON oq.orderid = oi.order_id
+     LEFT JOIN pod_qty pq ON pq.orderid = oi.order_id
+     LEFT JOIN prod_units pu ON pu.orderid = oi.order_id
+     LEFT JOIN analytics.dim_facility df ON df.facility_id = r.facilityid
+     LEFT JOIN analytics.dim_program dpr ON dpr.program_id = r.programid
+     LEFT JOIN analytics.dim_processing_period dpp ON dpp.processing_period_id = r.processingperiodid;
+
+ALTER TABLE public.vw_requisition_order_flow
+    OWNER TO postgres;
+
+

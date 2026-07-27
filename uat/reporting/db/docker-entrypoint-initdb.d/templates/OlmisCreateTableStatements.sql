@@ -1803,6 +1803,123 @@ ALTER TABLE public.kafka_stock_card_line_item_reasons OWNER TO postgres;
 
 
 --
+-- Name: orders; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.kafka_orders (
+                                     id uuid NOT NULL,
+                                     createdbyid uuid NOT NULL,
+                                     createddate timestamp with time zone,
+                                     emergency boolean NOT NULL,
+                                     externalid uuid,
+                                     facilityid uuid,
+                                     ordercode text NOT NULL,
+                                     processingperiodid uuid,
+                                     programid uuid NOT NULL,
+                                     quotedcost numeric(19,2) NOT NULL,
+                                     receivingfacilityid uuid NOT NULL,
+                                     requestingfacilityid uuid NOT NULL,
+                                     status character varying(255) NOT NULL,
+                                     supplyingfacilityid uuid NOT NULL,
+                                     lastupdateddate timestamp with time zone NOT NULL,
+                                     lastupdaterid uuid NOT NULL,
+                                     extradata jsonb
+);
+
+
+ALTER TABLE public.kafka_orders OWNER TO postgres;
+
+
+--
+-- Name: order_status_changes; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.kafka_order_status_changes (
+                                                   id uuid NOT NULL,
+                                                   authorid uuid,
+                                                   createddate timestamp with time zone,
+                                                   status character varying(255) NOT NULL,
+                                                   orderid uuid NOT NULL
+);
+
+
+ALTER TABLE public.kafka_order_status_changes OWNER TO postgres;
+
+
+--
+-- Name: order_line_items; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.kafka_order_line_items (
+                                               id uuid NOT NULL,
+                                               orderid uuid NOT NULL,
+                                               orderableid uuid NOT NULL,
+                                               orderedquantity bigint NOT NULL,
+                                               orderableversionnumber bigint,
+                                               extradata jsonb
+);
+
+
+ALTER TABLE public.kafka_order_line_items OWNER TO postgres;
+
+
+--
+-- Name: shipments; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.kafka_shipments (
+                                        id uuid NOT NULL,
+                                        orderid uuid,
+                                        shippedbyid uuid NOT NULL,
+                                        shippeddate timestamp with time zone NOT NULL,
+                                        notes text,
+                                        extradata jsonb
+);
+
+
+ALTER TABLE public.kafka_shipments OWNER TO postgres;
+
+
+--
+-- Name: proofs_of_delivery; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.kafka_proofs_of_delivery (
+                                                 id uuid NOT NULL,
+                                                 shipmentid uuid NOT NULL,
+                                                 status text DEFAULT 'INITIATED'::text,
+                                                 deliveredby text,
+                                                 receivedby text,
+                                                 receiveddate date
+);
+
+
+ALTER TABLE public.kafka_proofs_of_delivery OWNER TO postgres;
+
+
+--
+-- Name: proof_of_delivery_line_items; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.kafka_proof_of_delivery_line_items (
+                                                           id uuid NOT NULL,
+                                                           proofofdeliveryid uuid NOT NULL,
+                                                           notes text,
+                                                           quantityaccepted integer,
+                                                           quantityrejected integer,
+                                                           orderableid uuid NOT NULL,
+                                                           lotid uuid,
+                                                           vvmstatus character varying(255),
+                                                           usevvm boolean DEFAULT false NOT NULL,
+                                                           rejectionreasonid uuid,
+                                                           orderableversionnumber bigint
+);
+
+
+ALTER TABLE public.kafka_proof_of_delivery_line_items OWNER TO postgres;
+
+
+--
 -- Name: available_requisition_column_options available_requisition_column_options_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1896,6 +2013,54 @@ ALTER TABLE ONLY public.kafka_status_messages
 
 ALTER TABLE ONLY public.kafka_status_changes
     ADD CONSTRAINT status_changes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: orders orders_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.kafka_orders
+    ADD CONSTRAINT orders_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: order_status_changes order_status_changes_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.kafka_order_status_changes
+    ADD CONSTRAINT order_status_changes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: order_line_items order_line_items_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.kafka_order_line_items
+    ADD CONSTRAINT order_line_items_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: shipments shipments_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.kafka_shipments
+    ADD CONSTRAINT shipments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: proofs_of_delivery proofs_of_delivery_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.kafka_proofs_of_delivery
+    ADD CONSTRAINT proofs_of_delivery_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: proof_of_delivery_line_items proof_of_delivery_line_items_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.kafka_proof_of_delivery_line_items
+    ADD CONSTRAINT proof_of_delivery_line_items_pkey PRIMARY KEY (id);
 
 
 --
