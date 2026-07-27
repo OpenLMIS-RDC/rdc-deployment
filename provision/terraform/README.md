@@ -70,9 +70,27 @@ AWS_PROFILE=<profile> terraform -chdir=/<abs path>/rdc-deployment/provision/terr
 Verify the account with `aws sts get-caller-identity` before applying. Note
 that changing `user_data` stops and starts the instance.
 
-State is kept local (single operator); `terraform.tfstate` is gitignored,
-contains the DB password, and must not be committed or deleted. For remote
-state see the commented `backend "s3"` block in `dev/main.tf`.
+## State
+
+State is stored remotely in S3: bucket `drc-openlmis-terraform-states`
+(eu-west-1, versioned, encrypted, public access blocked), one key per
+environment (`elmis-dev.tfstate`) - see the `backend "s3"` block in the
+environment's `main.tf`. The state contains the database password, so access
+to the bucket must be treated as access to the secrets.
+
+- The backend reads S3 on every terraform command, so valid credentials are
+  required even for `init`/`plan`. Profiles created with the browser-based
+  `aws login` are not understood by the backend - export plain env credentials
+  first:
+  ```bash
+  eval $(aws configure export-credentials --profile openlmis-drc --format env)
+  ```
+- Bucket versioning is the state history/undo mechanism.
+- No state locking on Terraform 1.9.x (fine for a single operator); when more
+  operators or CI run terraform, upgrade to >= 1.10 and add
+  `use_lockfile = true` to the backend block.
+- Never commit `terraform.tfstate` files; local copies left over from before
+  the migration should be deleted.
 
 ## Creating a new environment
 
@@ -80,8 +98,9 @@ state see the commented `backend "s3"` block in `dev/main.tf`.
    route to an internet gateway, an ISSUED ACM certificate covering the
    environment FQDN, two free Elastic IPs in the region.
 2. Copy `dev/` to `<env>/`; the only edits normally needed are the backend
-   block and the `alb_sg_description` override (dev-only legacy value - remove
-   it for new environments).
+   block's `key` (one state object per environment in the shared bucket) and
+   the `alb_sg_description` override (dev-only legacy value - remove it for
+   new environments).
 3. Create `<env>_env/terraform.tfvars` in `rdc-configuration` from
    `dev/terraform.tfvars.example` and fill in all values.
 4. `init`, `plan`, `apply` as above.

@@ -1,15 +1,12 @@
 terraform {
   required_version = ">= 1.5.0"
 
-  # State is kept local for the time being (single operator). If remote,
-  # shared state is ever needed (CI, more operators), create a versioned
-  # and encrypted S3 bucket, uncomment, and run: terraform init -migrate-state
-  # backend "s3" {
-  #   bucket  = "<state-bucket>"
-  #   key    = "elmis-dev.tfstate"
-  #   region = "eu-west-1"
-  #   encrypt = true
-  # }
+  backend "s3" {
+    bucket  = "drc-openlmis-terraform-states"
+    key     = "elmis-dev.tfstate"
+    region  = "eu-west-1"
+    encrypt = true
+  }
 }
 
 provider "aws" {
