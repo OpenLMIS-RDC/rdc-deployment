@@ -493,8 +493,9 @@ CREATE OR REPLACE VIEW public.vw_expiry_risk
     df.district_name AS district,
     df.region_name AS region,
     df.facility_type_name AS type_de_structure,
-    EXTRACT(year FROM fe.expiration_date)::integer AS annee_expiration,
-    EXTRACT(month FROM fe.expiration_date)::integer AS mois_expiration
+    EXTRACT(year FROM fe.expiration_date)::integer AS annee,
+    EXTRACT(month FROM fe.expiration_date)::integer AS mois,
+    to_char(fe.expiration_date::timestamp with time zone, 'YYYY-MM'::text) AS annee_mois
    FROM analytics.fact_expired_risk_snapshot fe
      LEFT JOIN analytics.dim_product dp ON dp.orderable_id = fe.product_id
      LEFT JOIN analytics.dim_facility df ON df.facility_id = fe.facility_id
@@ -563,7 +564,7 @@ CREATE OR REPLACE VIEW public.vw_order_flow_product
         END AS statut_commande,
     oli.orderableid::uuid AS orderable_id,
     dp.product_code AS code_produit,
-    dp.product_name AS nom_produit,
+    dp.product_name AS nom_du_produit,
     dp.product_description AS unite_du_produit,
     rli.qte_demandee,
     rli.qte_approuvee,
@@ -746,3 +747,215 @@ ALTER TABLE public.vw_requisition_order_flow
     OWNER TO postgres;
 
 
+
+
+-- View: public.vw_stock_msd
+
+-- DROP VIEW public.vw_stock_msd;
+
+CREATE OR REPLACE VIEW public.vw_stock_msd
+ AS
+ WITH bornes AS (
+         SELECT max(kafka_stock_card_line_items.occurreddate) AS d_max
+           FROM kafka_stock_card_line_items
+        ), conso AS (
+         SELECT sc.facilityid AS facility_id,
+            sc.orderableid AS product_id,
+            sc.programid AS program_id,
+            sum(li.quantity)::numeric / 3.0 AS cmm
+           FROM kafka_stock_card_line_items li
+             JOIN kafka_stock_card_line_item_reasons r ON r.id = li.reasonid
+             JOIN kafka_stock_cards sc ON sc.id = li.stockcardid
+             CROSS JOIN bornes b
+          WHERE (r.name = ANY (ARRAY['Consommation'::text, 'Consumed'::text, 'Sortie de stock'::text]))
+            AND li.occurreddate > (b.d_max - '3 mons'::interval)
+            AND li.occurreddate <= b.d_max
+          GROUP BY sc.facilityid, sc.orderableid, sc.programid
+        ), sdu AS (
+         SELECT DISTINCT ON (fact_stock_daily.facility_id, fact_stock_daily.product_id) fact_stock_daily.facility_id,
+            fact_stock_daily.product_id,
+            fact_stock_daily.program_id,
+            fact_stock_daily.stock_on_hand,
+            fact_stock_daily.movement_date
+           FROM analytics.fact_stock_daily
+          ORDER BY fact_stock_daily.facility_id, fact_stock_daily.product_id, fact_stock_daily.movement_date DESC
+        )
+ SELECT s.facility_id,
+    s.product_id,
+    s.program_id,
+    s.movement_date AS date_rapport,
+    EXTRACT(year FROM s.movement_date)::integer AS annee,
+    EXTRACT(month FROM s.movement_date)::integer AS mois_num,
+    to_char(s.movement_date::timestamp with time zone, 'TMMonth'::text) AS mois,
+    fac.geographic_level AS niveau_organisation,
+    fac.geographic_zone_name AS unite_organisation,
+    fac.district_name AS district,
+    fac.region_name AS region,
+    fac.facility_type_name AS type_structure,
+    fac.facility_name AS structure,
+    p.program_name AS programme,
+    o.product_name AS produit,
+    o.product_code AS code_produit,
+    s.stock_on_hand AS quantites_en_fin_de_periode,
+    round(c.cmm, 2) AS cmm,
+        CASE
+            WHEN s.stock_on_hand <= 0::numeric THEN 0::numeric
+            WHEN COALESCE(c.cmm, 0::numeric) = 0::numeric THEN NULL::numeric
+            ELSE LEAST(round(s.stock_on_hand / c.cmm, 2), 24::numeric)
+        END AS msd,
+        CASE
+            WHEN s.stock_on_hand <= 0::numeric THEN 'Rupture'::text
+            WHEN COALESCE(c.cmm, 0::numeric) = 0::numeric THEN 'Stock dormant'::text
+            WHEN (s.stock_on_hand / c.cmm) <= 4::numeric THEN 'Potentielle rupture'::text
+            WHEN (s.stock_on_hand / c.cmm) <= 7::numeric THEN 'Sous-stock'::text
+            WHEN (s.stock_on_hand / c.cmm) <= 15::numeric THEN 'Satisfaisant'::text
+            ELSE 'Surstock'::text
+        END AS etat_stock
+   FROM sdu s
+     LEFT JOIN conso c ON c.facility_id = s.facility_id AND c.product_id = s.product_id AND c.program_id = s.program_id
+     LEFT JOIN analytics.dim_facility fac ON fac.facility_id = s.facility_id
+     LEFT JOIN analytics.dim_product o ON o.orderable_id = s.product_id
+     LEFT JOIN analytics.dim_program p ON p.program_id = s.program_id;
+
+ALTER TABLE public.vw_stock_msd
+    OWNER TO postgres;
+
+
+
+-- View: public.vw_rupture_structures
+
+-- DROP VIEW public.vw_rupture_structures;
+
+CREATE OR REPLACE VIEW public.vw_rupture_structures
+ AS
+ WITH prod_prog AS (
+         SELECT DISTINCT kafka_program_orderables.orderableid AS product_id,
+            kafka_program_orderables.programid AS program_id
+           FROM kafka_program_orderables
+          WHERE kafka_program_orderables.active
+        ), prog_fac AS (
+         SELECT DISTINCT kafka_supported_programs.programid AS program_id,
+            kafka_supported_programs.facilityid AS facility_id
+           FROM kafka_supported_programs
+          WHERE kafka_supported_programs.active
+        ), soh AS (
+         SELECT DISTINCT ON (fact_stock_daily.facility_id, fact_stock_daily.product_id) fact_stock_daily.facility_id,
+            fact_stock_daily.product_id,
+            fact_stock_daily.stock_on_hand
+           FROM analytics.fact_stock_daily
+          ORDER BY fact_stock_daily.facility_id, fact_stock_daily.product_id, fact_stock_daily.movement_date DESC
+        ), base AS (
+         SELECT pp.product_id,
+            pp.program_id,
+            pf.facility_id
+           FROM prod_prog pp
+             JOIN prog_fac pf ON pf.program_id = pp.program_id
+        )
+ SELECT b.product_id,
+    b.facility_id,
+    b.program_id,
+    o.product_code AS code_produit,
+    o.product_name AS produit,
+    p.program_name AS programme,
+    fac.facility_name AS structure,
+    fac.geographic_level AS niveau_organisation,
+    fac.geographic_zone_name AS unite_organisation,
+    fac.district_name AS district,
+    fac.region_name AS region,
+    fac.facility_type_name AS type_structure,
+    s.stock_on_hand,
+    1 AS structure_existante,
+        CASE
+            WHEN COALESCE(s.stock_on_hand, 0::numeric) <= 0::numeric THEN 1
+            ELSE 0
+        END AS en_rupture,
+        CASE
+            WHEN s.facility_id IS NULL THEN 1
+            ELSE 0
+        END AS sans_donnee,
+        CASE
+            WHEN s.stock_on_hand <= 0::numeric THEN 1
+            ELSE 0
+        END AS stockout_confirme
+   FROM base b
+     LEFT JOIN soh s ON s.facility_id = b.facility_id AND s.product_id = b.product_id
+     LEFT JOIN analytics.dim_facility fac ON fac.facility_id = b.facility_id
+     LEFT JOIN analytics.dim_product o ON o.orderable_id = b.product_id
+     LEFT JOIN analytics.dim_program p ON p.program_id = b.program_id;
+
+ALTER TABLE public.vw_rupture_structures
+    OWNER TO postgres;
+
+
+
+-- View: public.vw_taux_perte
+
+-- DROP VIEW public.vw_taux_perte;
+
+CREATE OR REPLACE VIEW public.vw_taux_perte
+ AS
+ WITH mv AS (
+         SELECT sc.facilityid AS facility_id,
+            sc.orderableid AS product_id,
+            sc.programid AS program_id,
+            date_trunc('month'::text, li.occurreddate::timestamp with time zone)::date AS mois,
+            li.quantity,
+            r.reasontype,
+            r.name AS reason
+           FROM kafka_stock_card_line_items li
+             JOIN kafka_stock_card_line_item_reasons r ON r.id = li.reasonid
+             JOIN kafka_stock_cards sc ON sc.id = li.stockcardid
+        ), agg AS (
+         SELECT mv.facility_id,
+            mv.product_id,
+            mv.program_id,
+            mv.mois,
+            sum(mv.quantity) FILTER (WHERE mv.reasontype = 'CREDIT'::text) AS entrees,
+            sum(mv.quantity) FILTER (WHERE mv.reasontype = 'DEBIT'::text) AS sorties_totales,
+            sum(mv.quantity) FILTER (WHERE (mv.reason = ANY (ARRAY['Peremption'::text, 'Avarie'::text, 'Vol ou Disparition'::text]))) AS pertes,
+            sum(mv.quantity) FILTER (WHERE mv.reason = 'Peremption'::text) AS pertes_peremption,
+            sum(mv.quantity) FILTER (WHERE mv.reason = 'Avarie'::text) AS pertes_avarie,
+            sum(mv.quantity) FILTER (WHERE mv.reason = 'Vol ou Disparition'::text) AS pertes_vol
+           FROM mv
+          GROUP BY mv.facility_id, mv.product_id, mv.program_id, mv.mois
+        ), opening AS (
+         SELECT DISTINCT ON (stock_daily_history.facility_id, stock_daily_history.product_id, stock_daily_history.program_id, (date_trunc('month'::text, stock_daily_history.movement_date::timestamp with time zone))) stock_daily_history.facility_id,
+            stock_daily_history.product_id,
+            stock_daily_history.program_id,
+            date_trunc('month'::text, stock_daily_history.movement_date::timestamp with time zone)::date AS mois,
+            stock_daily_history.opening_balance AS stock_debut
+           FROM analytics.stock_daily_history
+          ORDER BY stock_daily_history.facility_id, stock_daily_history.product_id, stock_daily_history.program_id, (date_trunc('month'::text, stock_daily_history.movement_date::timestamp with time zone)), stock_daily_history.movement_date
+        )
+ SELECT a.mois AS date_rapport,
+    EXTRACT(year FROM a.mois)::integer AS annee,
+    to_char(a.mois::timestamp with time zone, 'TMMonth'::text) AS mois,
+    fac.province_name AS province,
+    fac.health_zone_name AS zone_de_sante,
+    fac.health_area_name AS aire_de_sante,
+    fac.facility_name AS etablissement_de_sante,
+    fac.facility_type_name AS type_structure,
+    p.program_name AS programme,
+    o.product_code AS code,
+    o.product_name AS produit,
+    op.stock_debut,
+    COALESCE(a.entrees, 0::bigint) AS quantite_entrees,
+    COALESCE(a.sorties_totales, 0::bigint) AS quantite_sorties,
+    COALESCE(a.pertes, 0::bigint) AS quantite_perdue,
+    COALESCE(a.pertes_peremption, 0::bigint) AS pertes_peremption,
+    COALESCE(a.pertes_avarie, 0::bigint) AS pertes_avarie,
+    COALESCE(a.pertes_vol, 0::bigint) AS pertes_vol,
+    op.stock_debut + COALESCE(a.entrees, 0::bigint)::numeric AS stock_total_disponible,
+    COALESCE(a.pertes, 0::bigint)::numeric / NULLIF(a.entrees, 0)::numeric AS taux_perte_sur_entrees,
+    COALESCE(a.pertes, 0::bigint)::numeric / NULLIF(a.sorties_totales, 0)::numeric AS taux_perte_sur_sorties,
+    COALESCE(a.pertes, 0::bigint)::numeric / NULLIF(op.stock_debut + COALESCE(a.entrees, 0::bigint)::numeric, 0::numeric) AS taux_perte_sur_disponible,
+    round(100.0 * COALESCE(a.pertes, 0::bigint)::numeric / NULLIF(a.sorties_totales, 0)::numeric, 1) AS taux_perte_pct,
+    to_char(a.mois::timestamp with time zone, 'YYYY-MM'::text) AS annee_mois
+   FROM agg a
+     LEFT JOIN opening op ON op.facility_id = a.facility_id AND op.product_id = a.product_id AND op.program_id = a.program_id AND op.mois = a.mois
+     LEFT JOIN analytics.dim_facility fac ON fac.facility_id = a.facility_id
+     LEFT JOIN analytics.dim_program p ON p.program_id = a.program_id
+     LEFT JOIN analytics.dim_product o ON o.orderable_id = a.product_id;
+
+ALTER TABLE public.vw_taux_perte
+    OWNER TO postgres;

@@ -361,3 +361,48 @@ SELECT
     v.supervisory_node_id,
     v.rightname
 FROM public.view_facility_access v;
+
+-- 3.6 Fait : Delais de traitement des requisitions (lead time)
+-- Source reelle : public.kafka_requisitions + public.kafka_status_changes
+-- Consomme par les datasets Superset "Suivi des requisitions",
+-- "Suivi des requisitions - etapes" et "Delai moyen de traitement des requisitions".
+CREATE OR REPLACE VIEW analytics.fact_requisition_leadtime AS
+WITH sc AS (
+    SELECT
+        requisitionid,
+        min(createddate::timestamp without time zone) FILTER (WHERE status::text = 'INITIATED')   AS date_initiated,
+        min(createddate::timestamp without time zone) FILTER (WHERE status::text = 'SUBMITTED')   AS date_submitted,
+        min(createddate::timestamp without time zone) FILTER (WHERE status::text = 'AUTHORIZED')  AS date_authorized,
+        min(createddate::timestamp without time zone) FILTER (WHERE status::text = 'IN_APPROVAL') AS date_in_approval,
+        min(createddate::timestamp without time zone) FILTER (WHERE status::text = 'APPROVED')    AS date_approved,
+        min(createddate::timestamp without time zone) FILTER (WHERE status::text = 'RELEASED')    AS date_released,
+        min(createddate::timestamp without time zone) FILTER (WHERE status::text = 'REJECTED')    AS date_rejected,
+        max(createddate::timestamp without time zone)                                            AS date_last_change
+    FROM public.kafka_status_changes
+    GROUP BY requisitionid
+)
+SELECT
+    r.id                 AS req_id,
+    r.facilityid         AS facility_id,
+    r.programid          AS program_id,
+    r.processingperiodid AS processing_period_id,
+    r.status             AS req_status_current,
+    r.emergency          AS emergency_status,
+    -- Jalons
+    sc.date_initiated,
+    sc.date_submitted,
+    sc.date_authorized,
+    sc.date_in_approval,
+    sc.date_approved,
+    sc.date_released,
+    sc.date_rejected,
+    sc.date_last_change,
+    -- Delais en jours
+    EXTRACT(epoch FROM sc.date_submitted  - sc.date_initiated)  / 86400.0 AS delai_initiated_to_submitted_j,
+    EXTRACT(epoch FROM sc.date_authorized - sc.date_submitted)  / 86400.0 AS delai_submitted_to_authorized_j,
+    EXTRACT(epoch FROM sc.date_approved   - sc.date_authorized) / 86400.0 AS delai_authorized_to_approved_j,
+    EXTRACT(epoch FROM sc.date_released   - sc.date_approved)   / 86400.0 AS delai_approved_to_released_j,
+    EXTRACT(epoch FROM sc.date_released   - sc.date_initiated)  / 86400.0 AS delai_total_initiated_to_released_j,
+    date_trunc('month', sc.date_initiated)::date AS month_initiated
+FROM public.kafka_requisitions r
+LEFT JOIN sc ON sc.requisitionid = r.id;
