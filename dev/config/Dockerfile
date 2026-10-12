@@ -1,10 +1,12 @@
-FROM alpine:3.18
+FROM alpine:3.21
 
-COPY log/logback.xml /config/log/logback.xml
-COPY cert/root.pem /config/cert/root.pem
-COPY promtail/promtail-config.yaml /config/promtail/promtail-config.yaml
-COPY reports/ /config/reports/
+WORKDIR /stage
 
-RUN chmod -R 644 /config/reports
+COPY log/ ./log/
+COPY cert/ ./cert/
+COPY promtail/ ./promtail/
+COPY reports/ ./reports/
 
-CMD /bin/true
+RUN chmod -R 644 ./reports
+
+CMD ["sh", "-c", "cp -a /stage/. /config/"]
