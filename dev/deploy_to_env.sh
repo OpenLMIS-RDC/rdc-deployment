@@ -212,10 +212,22 @@ done
 make package-fetch
 make setup
 
-# 'make reset' wiped ClickHouse on restore - rebuild the curated marts now
-# instead of leaving dashboards empty until the hourly Airflow DAG.
+# Tables added to SOURCE_PG_TABLE_ALLOWLIST since the last deploy are not
+# backfilled by `make setup` (it only re-registers the connector). MODE=auto
+# diffs the live connector config against .env and triggers an incremental
+# snapshot for the new tables only; it is a no-op when nothing changed.
+make connector-refresh
+
 if [ "${KEEP_OR_RESTORE:-keep}" = "restore" ]; then
+  # 'make reset' wiped ClickHouse on restore - rebuild the curated marts now
+  # instead of leaving dashboards empty until the hourly Airflow DAG.
   make initial-dbt-build
+else
+  # Incremental build so models added or changed in the core/extension
+  # packages exist before anyone opens the freshly imported dashboards.
+  # Rows for newly snapshotted tables may still be arriving; the hourly
+  # Airflow DAG fills them in.
+  make dbt-build
 fi
 REMOTE
 
