@@ -50,11 +50,25 @@ BEGIN
       referencedata.supported_programs,
       referencedata.requisition_group_members,
       referencedata.requisition_group_program_schedules,
+      referencedata.lots,
+      referencedata.program_orderables,
+      referencedata.geographic_levels,
+      referencedata.facility_operators,
+      referencedata.users,
       requisition.requisitions,
       requisition.requisition_line_items,
       requisition.status_changes,
       requisition.stock_adjustments,
-      requisition.stock_adjustment_reasons;
+      requisition.stock_adjustment_reasons,
+      stockmanagement.stock_cards,
+      stockmanagement.stock_card_line_items,
+      stockmanagement.stock_card_line_item_reasons,
+      fulfillment.orders,
+      fulfillment.order_line_items,
+      fulfillment.shipments,
+      fulfillment.proofs_of_delivery,
+      fulfillment.proof_of_delivery_line_items,
+      fulfillment.status_changes;
     RAISE NOTICE 'Created publication dbz_publication';
   ELSE
     RAISE NOTICE 'Publication dbz_publication already exists - ensuring tables are included';
@@ -75,11 +89,25 @@ ALTER PUBLICATION dbz_publication SET TABLE
   referencedata.supported_programs,
   referencedata.requisition_group_members,
   referencedata.requisition_group_program_schedules,
+  referencedata.lots,
+  referencedata.program_orderables,
+  referencedata.geographic_levels,
+  referencedata.facility_operators,
+  referencedata.users,
   requisition.requisitions,
   requisition.requisition_line_items,
   requisition.status_changes,
   requisition.stock_adjustments,
-  requisition.stock_adjustment_reasons;
+  requisition.stock_adjustment_reasons,
+  stockmanagement.stock_cards,
+  stockmanagement.stock_card_line_items,
+  stockmanagement.stock_card_line_item_reasons,
+  fulfillment.orders,
+  fulfillment.order_line_items,
+  fulfillment.shipments,
+  fulfillment.proofs_of_delivery,
+  fulfillment.proof_of_delivery_line_items,
+  fulfillment.status_changes;
 
 -- 4. WAL retention safety (max_slot_wal_keep_size) is an RDS parameter-group
 --    setting; ALTER SYSTEM is not available to the RDS master user.

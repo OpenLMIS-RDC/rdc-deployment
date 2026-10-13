@@ -22,6 +22,24 @@ NiFi/Superset stack used by uat/prod.
 
 Set `SKIP_REPORTING_STACK=1` for an OpenLMIS-only redeploy.
 
+## Analytics packages
+
+The stack runs two Git-fetched packages, configured in the private repo's
+`.env.reporting-stack` and cloned on the host by `make package-fetch`:
+
+| Package | Repo | Variables |
+|---|---|---|
+| core | `OpenLMIS/openlmis-reporting` | `ANALYTICS_CORE_GIT_URL`, `_REF`, `ANALYTICS_CORE_PATH` |
+| DRC extension | `OpenLMIS-RDC/rdc-reporting` | `ANALYTICS_EXTENSION_GIT_URLS`, `_REFS`, `ANALYTICS_EXTENSIONS_PATHS` |
+
+No Jenkins checkout of either package is needed; the refs in the configuration
+repo are what gets deployed.
+
+After `make setup` the deploy runs `make connector-refresh` (incremental
+snapshot of tables newly added to the allowlist) and `make dbt-build`
+(`make initial-dbt-build` on restore), so extension marts exist before the
+dashboards are opened.
+
 ## One-time prerequisites
 
 1. **RDS replication grant** (the master user is not a superuser on RDS;
@@ -71,3 +89,6 @@ FROM pg_replication_slots;
 The table list must stay identical in:
 - `reporting-stack-cdc.sql` (this directory)
 - `SOURCE_PG_TABLE_ALLOWLIST` in the private repo's `.env.reporting-stack`
+
+The connector-registration preflight fails the deploy if a table is in the
+allowlist but missing from the publication.
