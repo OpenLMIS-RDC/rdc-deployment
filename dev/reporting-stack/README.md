@@ -17,9 +17,12 @@ NiFi/Superset stack used by uat/prod.
 1. Stages `.env.reporting-stack` (from the private configuration repo) as the
    platform's `.env`.
 2. Rsyncs the platform checkout to `<host>:/opt/reporting-stack` and ships
-   `reporting-stack-cdc.sql` alongside it (the compose uses local bind mounts,
-   so it cannot run through a remote `DOCKER_HOST`).
-3. Over SSH: injects the host docker GID for Airflow, `make up`, applies the
+   `reporting-stack-cdc.sql` and `deploy-remote.sh` alongside it under
+   `.deploy/` (the compose uses local bind mounts, so it cannot run through a
+   remote `DOCKER_HOST`).
+3. Runs `deploy-remote.sh` on the host as a file with stdin closed (piping it
+   into `bash -s` let `docker compose exec` inside `make setup` swallow the
+   rest of the script). It injects the host docker GID for Airflow, `make up`, applies the
    CDC SQL to the source RDS (idempotent, re-applied every deploy; it also
    replaces a `FOR ALL TABLES` publication with the explicit list), then
    `make package-fetch && make setup`. On `KEEP_OR_RESTORE=restore` the
