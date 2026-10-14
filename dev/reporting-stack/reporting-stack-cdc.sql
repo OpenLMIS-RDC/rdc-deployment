@@ -37,6 +37,17 @@ CREATE TABLE IF NOT EXISTS public.debezium_signal (
 --    source signal channel.
 DO $$
 BEGIN
+  -- Debezium's default publication.autocreate.mode (all_tables) creates the
+  -- publication FOR ALL TABLES if the connector starts before this script has
+  -- run, e.g. right after a restore. Such a publication cannot be narrowed with
+  -- SET TABLE, publishes every table in the database, and makes Postgres reject
+  -- DELETEs on tables without a primary key (stockmanagement Flyway migrations
+  -- then fail and the service crash-loops). Replace it with the explicit list.
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'dbz_publication' AND puballtables) THEN
+    DROP PUBLICATION dbz_publication;
+    RAISE NOTICE 'Dropped FOR ALL TABLES publication dbz_publication - recreating with the explicit table list';
+  END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'dbz_publication') THEN
     CREATE PUBLICATION dbz_publication FOR TABLE
       public.debezium_signal,
