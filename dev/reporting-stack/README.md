@@ -9,16 +9,21 @@ NiFi/Superset stack used by uat/prod.
 
 `deploy_to_env.sh` deploys OpenLMIS first, then the reporting stack:
 
+0. On `KEEP_OR_RESTORE=restore`, wipes the reporting stack (`make reset`)
+   **before** the database is replaced. Otherwise the still-running Debezium
+   connector reconnects to the restored database, finds no publication and
+   creates one `FOR ALL TABLES`, which blocks `DELETE`s on tables without a
+   primary key and makes OpenLMIS Flyway migrations fail.
 1. Stages `.env.reporting-stack` (from the private configuration repo) as the
    platform's `.env`.
 2. Rsyncs the platform checkout to `<host>:/opt/reporting-stack` and ships
    `reporting-stack-cdc.sql` alongside it (the compose uses local bind mounts,
    so it cannot run through a remote `DOCKER_HOST`).
 3. Over SSH: injects the host docker GID for Airflow, `make up`, applies the
-   CDC SQL to the source RDS (idempotent, re-applied every deploy), then
-   `make package-fetch && make setup`. On `KEEP_OR_RESTORE=restore` the stack
-   is `make reset` first and the curated marts are rebuilt with
-   `make initial-dbt-build`.
+   CDC SQL to the source RDS (idempotent, re-applied every deploy; it also
+   replaces a `FOR ALL TABLES` publication with the explicit list), then
+   `make package-fetch && make setup`. On `KEEP_OR_RESTORE=restore` the
+   curated marts are rebuilt with `make initial-dbt-build`.
 
 Set `SKIP_REPORTING_STACK=1` for an OpenLMIS-only redeploy.
 

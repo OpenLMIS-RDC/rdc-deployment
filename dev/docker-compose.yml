@@ -76,6 +76,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 10
+      start_period: 20m
 
   referencedata:
     restart: always
@@ -98,6 +99,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 10
+      start_period: 20m
 
   auth:
     restart: always
@@ -121,6 +123,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 10
+      start_period: 20m
 
   notification:
     restart: always
@@ -143,6 +146,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 10
+      start_period: 20m
 
   fulfillment:
     restart: always
@@ -165,6 +169,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 10
+      start_period: 20m
 
   cce:
     restart: always
@@ -204,6 +209,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 10
+      start_period: 20m
 
   report:
     restart: always
@@ -226,6 +232,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 10
+      start_period: 20m
 
   hapifhir:
     restart: always
