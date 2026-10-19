@@ -1,19 +1,20 @@
 services:
 
   consul:
-    command: -server -bootstrap
-    image: gliderlabs/consul-server
+    image: hashicorp/consul:${OL_CONSUL_VERSION}
+    command: agent -server -bootstrap-expect=1 -ui -client=0.0.0.0
+    environment:
+      CONSUL_BIND_INTERFACE: eth0
     ports:
-      - "8300"
-      - "8400"
+      - "8300:8300"
       - "8500:8500"
-      - "53"
+      - "8600:8600/tcp"
+      - "8600:8600/udp"
     healthcheck:
-      test: ["CMD", "wget", "-q", "-s", "http://127.0.0.1:8500/v1/status/leader"]
-      interval: 10s
-      timeout: 10s
-      retries: 12
-      start_period: 40s
+      test: ["CMD", "curl", "-f", "http://localhost:8500/v1/status/leader"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
 
   nginx:
     image: openlmis/nginx:${OL_NGINX_VERSION}
@@ -28,6 +29,10 @@ services:
     depends_on:
       consul:
         condition: service_healthy
+    ulimits:
+      nofile:
+        soft: 20000
+        hard: 40000
 
   ui:
     restart: always
@@ -35,6 +40,19 @@ services:
     env_file: settings.env
     depends_on:
       consul:
+        condition: service_healthy
+      # Services from which data is being taken during logging in
+      referencedata:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      notification:
+        condition: service_healthy
+      report:
+        condition: service_healthy
+      fulfillment:
+        condition: service_healthy
+      stockmanagement:
         condition: service_healthy
 
   requisition:
@@ -47,10 +65,18 @@ services:
       - 'service-config:/config'
       - 'syslog:/var/log'
     depends_on:
+      service-configuration:
+        condition: service_completed_successfully
       log:
         condition: service_started
       consul:
         condition: service_healthy
+    healthcheck:
+      test: "wget --spider http://localhost:8080/actuator/health || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 20m
 
   referencedata:
     restart: always
@@ -62,10 +88,18 @@ services:
       - 'service-config:/config'
       - 'syslog:/var/log'
     depends_on:
+      service-configuration:
+        condition: service_completed_successfully
       log:
         condition: service_started
       consul:
         condition: service_healthy
+    healthcheck:
+      test: "wget --spider http://localhost:8080/actuator/health || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 20m
 
   auth:
     restart: always
@@ -78,10 +112,18 @@ services:
       - 'auth-tomcat-log:/var/log/auth-tomcat'
       - 'syslog:/var/log'
     depends_on:
+      service-configuration:
+        condition: service_completed_successfully
       log:
         condition: service_started
       consul:
         condition: service_healthy
+    healthcheck:
+      test: "wget --spider http://localhost:8080/actuator/health || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 20m
 
   notification:
     restart: always
@@ -93,10 +135,18 @@ services:
       - 'service-config:/config'
       - 'syslog:/var/log'
     depends_on:
+      service-configuration:
+        condition: service_completed_successfully
       log:
         condition: service_started
       consul:
         condition: service_healthy
+    healthcheck:
+      test: "wget --spider http://localhost:8080/actuator/health || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 20m
 
   fulfillment:
     restart: always
@@ -108,10 +158,18 @@ services:
       - 'service-config:/config'
       - 'syslog:/var/log'
     depends_on:
+      service-configuration:
+        condition: service_completed_successfully
       log:
         condition: service_started
       consul:
         condition: service_healthy
+    healthcheck:
+      test: "wget --spider http://localhost:8080/actuator/health || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 20m
 
   cce:
     restart: always
@@ -123,6 +181,8 @@ services:
       - 'service-config:/config'
       - 'syslog:/var/log'
     depends_on:
+      service-configuration:
+        condition: service_completed_successfully
       log:
         condition: service_started
       consul:
@@ -138,10 +198,18 @@ services:
       - 'service-config:/config'
       - 'syslog:/var/log'
     depends_on:
+      service-configuration:
+        condition: service_completed_successfully
       log:
         condition: service_started
       consul:
         condition: service_healthy
+    healthcheck:
+      test: "wget --spider http://localhost:8080/actuator/health || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 20m
 
   report:
     restart: always
@@ -153,10 +221,18 @@ services:
       - 'service-config:/config'
       - 'syslog:/var/log'
     depends_on:
+      service-configuration:
+        condition: service_completed_successfully
       log:
         condition: service_started
       consul:
         condition: service_healthy
+    healthcheck:
+      test: "wget --spider http://localhost:8080/actuator/health || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 20m
 
   hapifhir:
     restart: always
@@ -168,6 +244,8 @@ services:
       - 'service-config:/config'
       - 'syslog:/var/log'
     depends_on:
+      service-configuration:
+        condition: service_completed_successfully
       log:
         condition: service_started
       consul:
@@ -180,7 +258,7 @@ services:
       - 'syslog:/var/log'
     depends_on:
       service-configuration:
-        condition: service_started
+        condition: service_completed_successfully
       consul:
         condition: service_healthy
 
@@ -198,12 +276,15 @@ services:
   promtail:
     image: grafana/promtail:${PROMTAIL_VERSION}
     volumes:
-      - ./config/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      - 'service-config:/config:ro'
       - /var/log:/var/log:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    command: -config.file=/etc/promtail/promtail-config.yaml
+    command: -config.file=/config/promtail/promtail-config.yaml
     restart: unless-stopped
+    depends_on:
+      service-configuration:
+        condition: service_completed_successfully
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:${CADVISOR_VERSION}
