@@ -68,6 +68,11 @@ services:
   requisition:
     restart: always
     image: openlmis/requisition:${OL_REQUISITION_VERSION}
+    labels:
+      monitoring.scrape: "true"
+      monitoring.port: "8080"
+      monitoring.path: "/actuator/prometheus"
+      monitoring.service: "requisition"
     env_file: settings.env
     environment:
       JAVA_OPTS: '-server -Xmx1536m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
@@ -91,6 +96,11 @@ services:
   referencedata:
     restart: always
     image: openlmis/referencedata:${OL_REFERENCEDATA_VERSION}
+    labels:
+      monitoring.scrape: "true"
+      monitoring.port: "8080"
+      monitoring.path: "/actuator/prometheus"
+      monitoring.service: "referencedata"
     env_file: settings.env
     environment:
       JAVA_OPTS: '-server -Xmx1536m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
@@ -114,6 +124,11 @@ services:
   auth:
     restart: always
     image: openlmis/auth:${OL_AUTH_VERSION}
+    labels:
+      monitoring.scrape: "true"
+      monitoring.port: "8080"
+      monitoring.path: "/actuator/prometheus"
+      monitoring.service: "auth"
     env_file: settings.env
     environment:
       JAVA_OPTS: '-server -Xmx512m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
@@ -138,6 +153,11 @@ services:
   notification:
     restart: always
     image: openlmis/notification:${OL_NOTIFICATION_VERSION}
+    labels:
+      monitoring.scrape: "true"
+      monitoring.port: "8080"
+      monitoring.path: "/actuator/prometheus"
+      monitoring.service: "notification"
     env_file: settings.env
     environment:
       JAVA_OPTS: '-server -Xmx512m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
@@ -161,6 +181,11 @@ services:
   fulfillment:
     restart: always
     image: openlmis/fulfillment:${OL_FULFILLMENT_VERSION}
+    labels:
+      monitoring.scrape: "true"
+      monitoring.port: "8080"
+      monitoring.path: "/actuator/prometheus"
+      monitoring.service: "fulfillment"
     env_file: settings.env
     environment:
       JAVA_OPTS: '-server -Xmx1024m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
@@ -184,6 +209,11 @@ services:
   cce:
     restart: always
     image: openlmis/cce:${OL_CCE_VERSION}
+    labels:
+      monitoring.scrape: "true"
+      monitoring.port: "8080"
+      monitoring.path: "/actuator/prometheus"
+      monitoring.service: "cce"
     env_file: settings.env
     environment:
       JAVA_OPTS: '-server -Xmx1024m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
@@ -201,6 +231,11 @@ services:
   stockmanagement:
     restart: always
     image: openlmis/stockmanagement:${OL_STOCKMANAGEMENT_VERSION}
+    labels:
+      monitoring.scrape: "true"
+      monitoring.port: "8080"
+      monitoring.path: "/actuator/prometheus"
+      monitoring.service: "stockmanagement"
     env_file: settings.env
     environment:
       JAVA_OPTS: '-server -Xmx1536m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
@@ -224,6 +259,11 @@ services:
   report:
     restart: always
     image: openlmisrdc/report:${DRC_REPORT_VERSION}
+    labels:
+      monitoring.scrape: "true"
+      monitoring.port: "8080"
+      monitoring.path: "/actuator/prometheus"
+      monitoring.service: "report"
     env_file: settings.env
     environment:
       JAVA_OPTS: '-server -Xmx2560m -Dlogging.config=/config/log/logback.xml -Dflyway.locations=classpath:db/migration'
