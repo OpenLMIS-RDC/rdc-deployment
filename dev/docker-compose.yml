@@ -157,8 +157,11 @@ services:
     volumes:
       - 'service-config:/config'
       - 'syslog:/var/log'
+      - 'fulfillment-extensions:/extensions'
     depends_on:
       service-configuration:
+        condition: service_completed_successfully
+      fulfillment-extension:
         condition: service_completed_successfully
       log:
         condition: service_started
@@ -170,6 +173,11 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20m
+
+  fulfillment-extension:
+    image: openlmisrdc/fulfillment-extension:${DRC_FULFILLMENT_EXTENSION_VERSION}
+    volumes:
+      - 'fulfillment-extensions:/extensions'
 
   cce:
     restart: always
@@ -324,4 +332,6 @@ volumes:
   consul-template-log:
     external: false
   service-config:
+    external: false
+  fulfillment-extensions:
     external: false
