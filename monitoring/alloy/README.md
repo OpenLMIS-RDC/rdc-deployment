@@ -32,9 +32,11 @@ the package CHANGELOG, commit, deploy.
 
 ## Deploy
 
-Manual Jenkins job `OpenLMIS-RDC-monitoring-alloy-deploy-to-<env>[-reporting]`.
-It checks out this repo and `rdc-configuration` (into `credentials/`) and runs
-`monitoring/alloy/deploy_alloy.sh <env> [reporting]` from the workspace root.
+Manual Jenkins job `OpenLMIS-RDC-monitoring-alloy-deploy`, parameter `TARGET`
+(`uat`, `uat-reporting`, `prod`, `prod-reporting`, `dev`; the `TARGET_NAME`
+without `rdc-`). It checks out this repo and `rdc-configuration` (into
+`credentials/`) and runs `monitoring/alloy/deploy_alloy.sh <env> [reporting]`
+from the workspace root.
 The host's Docker engine must be 20.10 or newer.
 
 ## Scraping apps
